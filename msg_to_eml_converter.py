@@ -7,10 +7,12 @@ Converts Microsoft Outlook MSG files to standard EML format.
 
 import os
 import sys
+import mimetypes
 from email import generator
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.mime.image import MIMEImage
 from email import encoders
 from email.utils import formatdate, make_msgid
 from datetime import datetime
@@ -85,52 +87,91 @@ class MSGToEMLConverter:
             'date': msg.date,
             'body': msg.body or '',
             'htmlBody': msg.htmlBody or '',
-            'attachments': []
+            'attachments': [],
+            'inline_attachments': []
         }
 
         # Extract attachments
-        for attachment in msg.attachments:
+        for i, attachment in enumerate(msg.attachments):
+            filename = attachment.longFilename or attachment.shortFilename or f'attachment_{i}'
+
+            # Check if attachment has data
+            if not attachment.data:
+                continue
+
             att_data = {
-                'filename': attachment.longFilename or attachment.shortFilename or 'attachment',
-                'data': attachment.data
+                'filename': filename,
+                'data': attachment.data,
+                'content_id': getattr(attachment, 'cid', None) or getattr(attachment, 'contentId', None)
             }
-            data['attachments'].append(att_data)
+
+            # Determine if it's an inline attachment (embedded image)
+            # Inline attachments typically have a Content-ID
+            if att_data['content_id']:
+                data['inline_attachments'].append(att_data)
+            else:
+                data['attachments'].append(att_data)
 
         if self.verbose:
             print(f"  Subject: {data['subject']}")
             print(f"  From: {data['sender']}")
             print(f"  To: {data['to']}")
             print(f"  Attachments: {len(data['attachments'])}")
+            print(f"  Inline Attachments: {len(data['inline_attachments'])}")
 
         return data
 
     def _create_eml_message(self, msg_data):
         """Create an EML message from extracted MSG data"""
-        # Create message container
-        if msg_data['htmlBody']:
-            eml_msg = MIMEMultipart('alternative')
-        elif msg_data['attachments']:
-            eml_msg = MIMEMultipart()
-        else:
+        has_html = bool(msg_data['htmlBody'])
+        has_attachments = bool(msg_data['attachments'])
+        has_inline = bool(msg_data['inline_attachments'])
+
+        # Case 1: Simple text only (no HTML, no attachments, no inline)
+        if not has_html and not has_attachments and not has_inline:
             eml_msg = MIMEText(msg_data['body'], 'plain', 'utf-8')
             self._set_headers(eml_msg, msg_data)
             return eml_msg
 
-        # Set headers
+        # Create the main container
+        eml_msg = MIMEMultipart('mixed')
         self._set_headers(eml_msg, msg_data)
 
-        # Add body content
-        if msg_data['htmlBody']:
-            # Create multipart alternative for plain text and HTML
+        # Build the content part (text/html with inline images)
+        if has_html and has_inline:
+            # Need related for HTML with inline images
+            msg_related = MIMEMultipart('related')
+
+            # Add text/html alternative inside related
+            msg_alternative = MIMEMultipart('alternative')
             text_part = MIMEText(msg_data['body'], 'plain', 'utf-8')
             html_part = MIMEText(msg_data['htmlBody'], 'html', 'utf-8')
-            eml_msg.attach(text_part)
-            eml_msg.attach(html_part)
+            msg_alternative.attach(text_part)
+            msg_alternative.attach(html_part)
+
+            msg_related.attach(msg_alternative)
+
+            # Add inline attachments to related
+            for inline_att in msg_data['inline_attachments']:
+                self._add_inline_attachment(msg_related, inline_att)
+
+            eml_msg.attach(msg_related)
+
+        elif has_html:
+            # HTML without inline images
+            msg_alternative = MIMEMultipart('alternative')
+            text_part = MIMEText(msg_data['body'], 'plain', 'utf-8')
+            html_part = MIMEText(msg_data['htmlBody'], 'html', 'utf-8')
+            msg_alternative.attach(text_part)
+            msg_alternative.attach(html_part)
+            eml_msg.attach(msg_alternative)
+
         else:
+            # Just plain text
             text_part = MIMEText(msg_data['body'], 'plain', 'utf-8')
             eml_msg.attach(text_part)
 
-        # Add attachments
+        # Add regular attachments at the end
         for attachment in msg_data['attachments']:
             self._add_attachment(eml_msg, attachment)
 
@@ -160,15 +201,89 @@ class MSGToEMLConverter:
         # Set Message-ID
         eml_msg['Message-ID'] = make_msgid()
 
+    def _add_inline_attachment(self, eml_msg, attachment):
+        """Add inline attachment (embedded image) to EML message"""
+        filename = attachment['filename']
+        data = attachment['data']
+        content_id = attachment['content_id']
+
+        # Detect MIME type
+        mime_type, _ = mimetypes.guess_type(filename)
+
+        if mime_type is None:
+            mime_type = 'application/octet-stream'
+
+        # Split into maintype and subtype
+        maintype, subtype = mime_type.split('/', 1)
+
+        # Create appropriate MIME object
+        if maintype == 'image':
+            try:
+                part = MIMEImage(data, _subtype=subtype)
+            except:
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(data)
+                encoders.encode_base64(part)
+        else:
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(data)
+            encoders.encode_base64(part)
+
+        # Add Content-ID header for inline reference
+        if content_id:
+            # Ensure Content-ID is properly formatted
+            if not content_id.startswith('<'):
+                content_id = f'<{content_id}>'
+            if not content_id.endswith('>'):
+                content_id = f'{content_id}>'
+            part.add_header('Content-ID', content_id)
+
+        # Add inline disposition
+        part.add_header('Content-Disposition', 'inline', filename=filename)
+
+        eml_msg.attach(part)
+
     def _add_attachment(self, eml_msg, attachment):
         """Add attachment to EML message"""
-        part = MIMEBase('application', 'octet-stream')
-        part.set_payload(attachment['data'])
-        encoders.encode_base64(part)
+        filename = attachment['filename']
+        data = attachment['data']
+
+        # Detect MIME type
+        mime_type, _ = mimetypes.guess_type(filename)
+
+        if mime_type is None:
+            mime_type = 'application/octet-stream'
+
+        # Split into maintype and subtype
+        maintype, subtype = mime_type.split('/', 1)
+
+        # Create appropriate MIME object
+        if maintype == 'image':
+            # Use MIMEImage for images
+            try:
+                part = MIMEImage(data, _subtype=subtype)
+            except:
+                # Fallback to base64 encoding
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(data)
+                encoders.encode_base64(part)
+        elif maintype == 'text':
+            # For text files
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(data)
+            encoders.encode_base64(part)
+        else:
+            # For other types
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(data)
+            encoders.encode_base64(part)
+
+        # Add filename header
         part.add_header(
             'Content-Disposition',
-            f'attachment; filename="{attachment["filename"]}"'
+            f'attachment; filename="{filename}"'
         )
+
         eml_msg.attach(part)
 
     def _write_eml_file(self, eml_message, eml_path):
