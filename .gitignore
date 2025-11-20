@@ -35,5 +35,16 @@ env/
 test_*.msg
 test_*.eml
 
-# Output
+# Web app uploads and output
+uploads/
 output/
+*.msg
+*.eml
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment variables
+.env
+.env.local

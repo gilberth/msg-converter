@@ -2,15 +2,23 @@
 
 Herramienta de Python para convertir archivos MSG de Microsoft Outlook al formato estándar EML (RFC 822).
 
+## 🌐 Aplicación Web
+
+¡Ahora disponible con interfaz web! Convierte tus archivos MSG directamente desde el navegador.
+
+**[Ver Guía de Deployment →](DEPLOYMENT.md)**
+
 ## Características
 
+- ✅ **Interfaz Web Moderna** - Arrastra y suelta archivos para convertir
 - ✅ Convierte archivos MSG individuales a formato EML
-- ✅ Procesamiento por lotes de directorios completos
+- ✅ Procesamiento por lotes de múltiples archivos
 - ✅ Preserva todos los metadatos del correo (remitente, destinatarios, asunto, fecha)
 - ✅ Mantiene el formato HTML y texto plano
 - ✅ Conserva todos los archivos adjuntos
-- ✅ Interfaz de línea de comandos fácil de usar
+- ✅ Interfaz de línea de comandos (CLI)
 - ✅ API de Python para integración en otros proyectos
+- ✅ Descarga en ZIP para conversiones múltiples
 
 ## Requisitos
 
@@ -34,7 +42,36 @@ pip install -r requirements.txt
 
 ## Uso
 
-### Línea de Comandos
+### Aplicación Web
+
+#### Ejecutar Localmente
+
+1. Instala las dependencias:
+```bash
+pip install -r requirements.txt
+```
+
+2. Inicia la aplicación:
+```bash
+python app.py
+```
+
+3. Abre tu navegador en: `http://localhost:5000`
+
+4. Arrastra archivos MSG o haz clic para seleccionar
+
+5. ¡Descarga tus archivos EML convertidos!
+
+#### Deployment en la Nube
+
+Para publicar la aplicación en internet, consulta la **[Guía de Deployment](DEPLOYMENT.md)** con instrucciones para:
+- Render.com (Recomendado - Gratis)
+- Railway.app
+- Fly.io
+- PythonAnywhere
+- Docker
+
+### Línea de Comandos (CLI)
 
 #### Convertir un archivo individual
 
@@ -151,11 +188,25 @@ if __name__ == '__main__':
 
 ```
 msg-converter/
-├── msg_to_eml_converter.py   # Script principal del convertidor
-├── test_converter.py          # Tests unitarios
-├── requirements.txt           # Dependencias de Python
-├── .gitignore                 # Archivos ignorados por Git
-└── README.md                  # Esta documentación
+├── app.py                      # Aplicación web Flask
+├── msg_to_eml_converter.py     # Motor de conversión
+├── templates/
+│   └── index.html              # Interfaz web
+├── static/
+│   ├── css/
+│   │   └── style.css           # Estilos
+│   └── js/
+│       └── app.js              # Lógica frontend
+├── test_converter.py           # Tests unitarios
+├── example.py                  # Ejemplos de uso
+├── requirements.txt            # Dependencias Python
+├── Dockerfile                  # Configuración Docker
+├── docker-compose.yml          # Docker Compose
+├── Procfile                    # Configuración Heroku/Render
+├── DEPLOYMENT.md               # Guía de deployment
+├── .gitignore                  # Archivos ignorados
+├── LICENSE                     # Licencia MIT
+└── README.md                   # Esta documentación
 ```
 
 ## Ejecutar Tests
@@ -247,10 +298,42 @@ Este proyecto está disponible bajo la licencia MIT.
 
 Para reportar bugs o solicitar nuevas características, por favor abre un issue en el repositorio.
 
+## Screenshots
+
+### Interfaz Web
+![Captura de la aplicación web con interfaz moderna de drag-and-drop]
+
+### Línea de Comandos
+```bash
+$ python msg_to_eml_converter.py email.msg -v
+Reading MSG file: email.msg
+  Subject: Reunión de Proyecto
+  From: juan@example.com
+  To: maria@example.com
+  Attachments: 2
+Creating EML file: email.eml
+Conversion completed successfully!
+```
+
+## Tecnologías Utilizadas
+
+- **Backend:** Python 3.11, Flask, Gunicorn
+- **Frontend:** HTML5, CSS3, JavaScript (Vanilla), Bootstrap 5
+- **Conversión:** extract-msg library
+- **Deployment:** Docker, Heroku, Render, Railway
+
 ## Changelog
 
+### v2.0.0 (2025-11-20)
+- 🎉 Aplicación web con interfaz moderna
+- ✨ Drag-and-drop para subir archivos
+- 📦 Descarga en ZIP para múltiples archivos
+- 🐳 Soporte completo para Docker
+- 📚 Guía de deployment detallada
+- 🔒 Limpieza automática de archivos (1 hora)
+
 ### v1.0.0 (2025-11-20)
-- Versión inicial
+- Versión inicial CLI
 - Conversión de MSG a EML
 - Soporte para archivos individuales y directorios
 - Preservación de adjuntos y metadatos
