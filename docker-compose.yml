@@ -1,14 +1,49 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
+  # Aplicación MSG to EML Converter
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: msg-converter
     ports:
       - "5000:5000"
     environment:
-      - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
+      # Flask
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - FLASK_ENV=development
+      
+      # Autenticación (deshabilitada por defecto para desarrollo local)
+      - ENABLE_AUTH=${ENABLE_AUTH:-false}
+      
+      # Authentik (solo si ENABLE_AUTH=true)
+      - AUTHENTIK_BASE_URL=${AUTHENTIK_BASE_URL:-https://auth.example.com}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID:-}
+      - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET:-}
+      - AUTHENTIK_SLUG=${AUTHENTIK_SLUG:-msg-converter}
+      - AUTHENTIK_REDIRECT_URI=${AUTHENTIK_REDIRECT_URI:-http://localhost:5000/callback}
+      
+      # Sesión
+      - SESSION_LIFETIME_HOURS=${SESSION_LIFETIME_HOURS:-24}
     volumes:
+      # Persistir archivos convertidos (opcional)
       - ./uploads:/app/uploads
-      - ./output:/app/output
+      - ./converted:/app/converted
     restart: unless-stopped
+    networks:
+      - msg-converter-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  msg-converter-network:
+    driver: bridge
+
+volumes:
+  uploads:
+  converted:

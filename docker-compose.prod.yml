@@ -1,0 +1,163 @@
+version: '3.8'
+
+# Configuración de producción con Authentik integrado
+# Este archivo despliega tanto MSG Converter como Authentik
+
+services:
+  # PostgreSQL para Authentik
+  postgresql:
+    image: postgres:16-alpine
+    container_name: authentik-db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASS:?database password required}
+      POSTGRES_USER: ${PG_USER:-authentik}
+      POSTGRES_DB: ${PG_DB:-authentik}
+    env_file:
+      - .env
+    networks:
+      - authentik-network
+
+  # Redis para Authentik
+  redis:
+    image: redis:alpine
+    container_name: authentik-redis
+    command: --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - redis:/data
+    networks:
+      - authentik-network
+
+  # Authentik Server
+  authentik-server:
+    image: ghcr.io/goauthentik/server:latest
+    container_name: authentik-server
+    restart: unless-stopped
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - authentik-media:/media
+      - authentik-custom-templates:/templates
+    env_file:
+      - .env
+    ports:
+      - "${AUTHENTIK_PORT_HTTP:-9000}:9000"
+      - "${AUTHENTIK_PORT_HTTPS:-9443}:9443"
+    depends_on:
+      - postgresql
+      - redis
+    networks:
+      - authentik-network
+      - msg-converter-network
+
+  # Authentik Worker
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:latest
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - authentik-media:/media
+      - authentik-certs:/certs
+      - authentik-custom-templates:/templates
+    env_file:
+      - .env
+    depends_on:
+      - postgresql
+      - redis
+    networks:
+      - authentik-network
+
+  # Aplicación MSG to EML Converter
+  msg-converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: msg-converter-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    environment:
+      # Flask
+      - SECRET_KEY=${SECRET_KEY:?secret key required}
+      - FLASK_ENV=production
+      
+      # Autenticación habilitada
+      - ENABLE_AUTH=true
+      
+      # Authentik (apunta al contenedor de Authentik)
+      - AUTHENTIK_BASE_URL=${AUTHENTIK_BASE_URL:-http://authentik-server:9000}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID:?client id required}
+      - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET:?client secret required}
+      - AUTHENTIK_SLUG=${AUTHENTIK_SLUG:-msg-converter}
+      - AUTHENTIK_REDIRECT_URI=${AUTHENTIK_REDIRECT_URI:?redirect uri required}
+      
+      # Sesión
+      - SESSION_LIFETIME_HOURS=${SESSION_LIFETIME_HOURS:-24}
+    volumes:
+      - msg-uploads:/app/uploads
+      - msg-converted:/app/converted
+    depends_on:
+      - authentik-server
+    networks:
+      - msg-converter-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  authentik-network:
+    driver: bridge
+  msg-converter-network:
+    driver: bridge
+
+volumes:
+  database:
+    driver: local
+  redis:
+    driver: local
+  authentik-media:
+    driver: local
+  authentik-certs:
+    driver: local
+  authentik-custom-templates:
+    driver: local
+  msg-uploads:
+    driver: local
+  msg-converted:
+    driver: local

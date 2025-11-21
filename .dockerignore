@@ -1,35 +1,50 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 .Python
-env/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
 venv/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.gitignore
-.mypy_cache
-.pytest_cache
-.hypothesis
-.idea
-.vscode
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
-uploads/*
-output/*
-*.msg
-*.eml
-README.md
-LICENSE
-example.py
-test_converter.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Environment files (se pasan como variables)
+.env
+.env.local
+.env.production
+
+# Documentación y ejemplos
+*.md
+docs/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Archivos temporales
+uploads/
+converted/
+*.log
+
+# GitHub
+.github/

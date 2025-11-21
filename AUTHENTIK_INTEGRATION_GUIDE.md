@@ -604,6 +604,410 @@ heroku config:set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_h
 
 ---
 
+## Despliegue con Docker
+
+### Opción 1: Solo la Aplicación (Authentik externo)
+
+Si ya tienes una instancia de Authentik funcionando en otro servidor, puedes desplegar solo la aplicación MSG Converter con Docker.
+
+#### Paso 1: Crear archivo `.env`
+
+Copia `.env.example` a `.env` y configura las variables:
+
+```bash
+cp .env.example .env
+nano .env  # o tu editor preferido
+```
+
+Configura al menos estas variables:
+```bash
+# Flask
+SECRET_KEY=your-random-secret-key-here  # Genera con: python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Autenticación
+ENABLE_AUTH=true
+
+# Authentik (apuntando a tu instancia externa)
+AUTHENTIK_BASE_URL=https://auth.example.com
+AUTHENTIK_CLIENT_ID=your-client-id
+AUTHENTIK_CLIENT_SECRET=your-secret
+AUTHENTIK_SLUG=msg-converter
+AUTHENTIK_REDIRECT_URI=http://your-server:5000/callback
+```
+
+#### Paso 2: Build y Run
+
+```bash
+# Build de la imagen
+docker build -t msg-converter .
+
+# Ejecutar el contenedor
+docker run -d \
+  --name msg-converter \
+  -p 5000:5000 \
+  --env-file .env \
+  --restart unless-stopped \
+  msg-converter
+```
+
+O usando docker-compose:
+
+```bash
+# Iniciar
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f app
+
+# Detener
+docker-compose down
+```
+
+#### Paso 3: Configurar Authentik
+
+1. En Authentik, configura el redirect URI:
+   ```
+   http://your-server-ip:5000/callback
+   ```
+
+2. Sigue las instrucciones de [Configuración del Provider OAuth2 en Authentik](#configuración-del-provider-oauth2-en-authentik)
+
+#### Paso 4: Acceder
+
+Accede a tu aplicación en: `http://your-server-ip:5000`
+
+---
+
+### Opción 2: Aplicación + Authentik (Stack completo)
+
+Despliega tanto MSG Converter como Authentik en el mismo servidor usando `docker-compose.prod.yml`.
+
+#### Paso 1: Preparar el entorno
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/your-repo/msg-converter.git
+cd msg-converter
+
+# Crear archivo .env
+cp .env.example .env
+```
+
+#### Paso 2: Configurar variables de entorno
+
+Edita `.env` con las siguientes variables **REQUERIDAS**:
+
+```bash
+# =============================================================================
+# FLASK CONFIGURATION
+# =============================================================================
+SECRET_KEY=<genera-con: python3 -c "import secrets; print(secrets.token_hex(32))">
+
+# =============================================================================
+# AUTHENTIK DATABASE
+# =============================================================================
+PG_PASS=<password-seguro-para-postgresql>
+PG_USER=authentik
+PG_DB=authentik
+
+# =============================================================================
+# AUTHENTIK SERVER
+# =============================================================================
+AUTHENTIK_SECRET_KEY=<genera-con: openssl rand -base64 60>
+
+# =============================================================================
+# APPLICATION CONFIGURATION
+# =============================================================================
+ENABLE_AUTH=false  # Inicia con auth deshabilitada para configurar primero
+AUTHENTIK_BASE_URL=http://authentik-server:9000  # URL interna de Docker
+APP_PORT=5000
+AUTHENTIK_PORT_HTTP=9000
+AUTHENTIK_PORT_HTTPS=9443
+```
+
+#### Paso 3: Iniciar el stack
+
+```bash
+# Iniciar todos los servicios
+docker-compose -f docker-compose.prod.yml up -d
+
+# Ver logs de todos los servicios
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Ver solo logs de Authentik
+docker-compose -f docker-compose.prod.yml logs -f authentik-server
+```
+
+Esto iniciará:
+- PostgreSQL (base de datos para Authentik)
+- Redis (caché para Authentik)
+- Authentik Server (puerto 9000 HTTP, 9443 HTTPS)
+- Authentik Worker (procesamiento en background)
+- MSG Converter (puerto 5000)
+
+#### Paso 4: Configuración inicial de Authentik
+
+1. **Accede a Authentik**: `http://your-server-ip:9000/if/flow/initial-setup/`
+
+2. **Crea el usuario administrador**:
+   - Email: tu-email@example.com
+   - Password: contraseña-segura
+
+3. **Inicia sesión** en Authentik con las credenciales creadas
+
+#### Paso 5: Crear Provider OAuth2 en Authentik
+
+**Opción A: Auto-configuración con el wizard** (Recomendado)
+
+1. Ve a `http://your-server-ip:5000/setup`
+2. Configura:
+   - Authentik URL: `http://your-server-ip:9000` (URL externa)
+   - Application Name: `MSG to EML Converter`
+   - Application URL: `http://your-server-ip:5000`
+3. Crea un token de API en Authentik (Directory → Tokens)
+4. Sigue el wizard de configuración
+
+**Opción B: Configuración manual**
+
+1. En Authentik, ve a **Applications → Applications**
+2. Crea una nueva **Application**:
+   - Name: `MSG to EML Converter`
+   - Slug: `msg-converter`
+   - Provider: (crear nuevo)
+
+3. Crea un **OAuth2/OIDC Provider**:
+   - Name: `MSG Converter Provider`
+   - Authorization flow: `default-provider-authorization-implicit-consent`
+   - Client type: `Confidential`
+   - Client ID: (se genera automáticamente, cópialo)
+   - Client Secret: (se genera automáticamente, cópialo)
+   - Redirect URIs: Agregar:
+     ```json
+     {
+       "matching_mode": "strict",
+       "url": "http://your-server-ip:5000/callback"
+     }
+     ```
+
+4. En **Advanced protocol settings**:
+   - ✅ Habilita "Include claims in id_token"
+
+5. En **Scopes**, selecciona:
+   - ✅ `authentik default OAuth Mapping: OpenID 'openid'`
+   - ✅ `authentik default OAuth Mapping: OpenID 'email'`
+   - ✅ `authentik default OAuth Mapping: OpenID 'profile'`
+
+6. Guarda el Provider y la Application
+
+#### Paso 6: Configurar la aplicación MSG Converter
+
+Actualiza `.env` con las credenciales de Authentik:
+
+```bash
+# Habilitar autenticación
+ENABLE_AUTH=true
+
+# Authentik URLs (para acceso desde fuera de Docker)
+AUTHENTIK_BASE_URL=http://your-server-ip:9000
+
+# OAuth2 credentials (copiadas de Authentik)
+AUTHENTIK_CLIENT_ID=<client-id-del-provider>
+AUTHENTIK_CLIENT_SECRET=<client-secret-del-provider>
+AUTHENTIK_SLUG=msg-converter
+AUTHENTIK_REDIRECT_URI=http://your-server-ip:5000/callback
+```
+
+#### Paso 7: Reiniciar la aplicación
+
+```bash
+# Reiniciar solo el contenedor de la app
+docker-compose -f docker-compose.prod.yml restart msg-converter
+
+# Ver logs para verificar
+docker-compose -f docker-compose.prod.yml logs -f msg-converter
+```
+
+#### Paso 8: Probar la autenticación
+
+1. Accede a `http://your-server-ip:5000`
+2. Deberías ver la página de bienvenida con el botón "Iniciar Sesión"
+3. Haz clic en "Iniciar Sesión"
+4. Serás redirigido a Authentik para autenticarte
+5. Después de login exitoso, volverás a la aplicación
+
+---
+
+### Comandos útiles de Docker
+
+```bash
+# Ver estado de contenedores
+docker-compose -f docker-compose.prod.yml ps
+
+# Ver logs en tiempo real
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Ver logs de un servicio específico
+docker-compose -f docker-compose.prod.yml logs -f msg-converter
+docker-compose -f docker-compose.prod.yml logs -f authentik-server
+
+# Reiniciar un servicio
+docker-compose -f docker-compose.prod.yml restart msg-converter
+
+# Detener todo
+docker-compose -f docker-compose.prod.yml down
+
+# Detener y eliminar volúmenes (⚠️ BORRA TODOS LOS DATOS)
+docker-compose -f docker-compose.prod.yml down -v
+
+# Reconstruir imagen de la app
+docker-compose -f docker-compose.prod.yml build msg-converter
+docker-compose -f docker-compose.prod.yml up -d msg-converter
+
+# Ver uso de recursos
+docker stats
+
+# Acceder a shell dentro del contenedor
+docker exec -it msg-converter /bin/bash
+docker exec -it authentik-server /bin/bash
+```
+
+---
+
+### Troubleshooting Docker
+
+#### Error: "Connection refused" al conectar con Authentik
+
+**Causa**: La aplicación intenta conectarse a Authentik usando la URL interna de Docker, pero no puede alcanzarlo.
+
+**Solución**:
+- Si ambos están en Docker: usa `AUTHENTIK_BASE_URL=http://authentik-server:9000`
+- Si Authentik está en otro servidor: usa la URL externa completa
+
+#### Error: "Network msg-converter-network not found"
+
+**Causa**: El network no se creó correctamente.
+
+**Solución**:
+```bash
+# Recrear networks
+docker network create msg-converter-network
+docker network create authentik-network
+```
+
+#### Error: "Port already in use"
+
+**Causa**: El puerto ya está siendo usado por otro proceso.
+
+**Solución**:
+```bash
+# Cambiar puerto en .env
+APP_PORT=5001  # o cualquier puerto disponible
+
+# O detener el proceso que usa el puerto
+sudo lsof -i :5000
+sudo kill -9 <PID>
+```
+
+#### Logs de Authentik muestran errores de base de datos
+
+**Causa**: PostgreSQL no inició correctamente o las credenciales son incorrectas.
+
+**Solución**:
+```bash
+# Verificar que PostgreSQL esté corriendo
+docker-compose -f docker-compose.prod.yml ps postgresql
+
+# Ver logs de PostgreSQL
+docker-compose -f docker-compose.prod.yml logs postgresql
+
+# Verificar credenciales en .env
+grep PG_ .env
+```
+
+---
+
+### Backup y Restauración
+
+#### Backup de datos de Authentik
+
+```bash
+# Backup de PostgreSQL
+docker exec authentik-db pg_dump -U authentik authentik > authentik-backup-$(date +%Y%m%d).sql
+
+# Backup de volúmenes
+docker run --rm \
+  -v authentik-media:/source \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/authentik-media-$(date +%Y%m%d).tar.gz -C /source .
+```
+
+#### Restauración
+
+```bash
+# Restaurar PostgreSQL
+docker exec -i authentik-db psql -U authentik authentik < authentik-backup-20251121.sql
+
+# Restaurar volúmenes
+docker run --rm \
+  -v authentik-media:/target \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/authentik-media-20251121.tar.gz -C /target
+```
+
+---
+
+### Producción con Reverse Proxy (Nginx/Traefik)
+
+Para usar en producción con HTTPS, se recomienda poner un reverse proxy delante:
+
+#### Ejemplo con Nginx
+
+```nginx
+# /etc/nginx/sites-available/msg-converter
+server {
+    listen 80;
+    server_name msg-converter.example.com;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name msg-converter.example.com;
+
+    # SSL certificates (Let's Encrypt)
+    ssl_certificate /etc/letsencrypt/live/msg-converter.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/msg-converter.example.com/privkey.pem;
+
+    # Proxy to Docker container
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+}
+```
+
+Habilitar y recargar:
+```bash
+sudo ln -s /etc/nginx/sites-available/msg-converter /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**IMPORTANTE**: Actualiza `AUTHENTIK_REDIRECT_URI` en `.env` a:
+```bash
+AUTHENTIK_REDIRECT_URI=https://msg-converter.example.com/callback
+```
+
+Y configura el mismo valor en Authentik (Provider → Redirect URIs).
+
+---
+
 ## Configuración del Provider OAuth2 en Authentik
 
 **CRÍTICO**: Después de crear el provider OAuth2 en Authentik (ya sea manualmente o con el wizard), debes configurar correctamente los siguientes parámetros para que la autenticación funcione:
@@ -1335,6 +1739,41 @@ Esta guía ha sido probada con:
 
 ## Changelog
 
+### Versión 2.2 (2025-11-21)
+
+**Nuevas características - Docker**:
+- 🐳 Agregada sección completa: "Despliegue con Docker"
+- 🐳 Dockerfile multi-stage optimizado para producción
+- 🐳 docker-compose.yml para desarrollo/testing local
+- 🐳 docker-compose.prod.yml con stack completo (App + Authentik + PostgreSQL + Redis)
+- 🐳 .dockerignore para optimizar builds
+- 🐳 .env.example con todas las variables documentadas
+- 🐳 Guía de configuración de Authentik en Docker paso a paso
+- 🐳 Wizard de auto-configuración funciona con Authentik en Docker
+- 🐳 Troubleshooting específico de Docker
+- 🐳 Comandos útiles de Docker y docker-compose
+- 🐳 Guía de backup y restauración de datos
+- 🐳 Configuración con reverse proxy (Nginx) para HTTPS
+- 🐳 Healthchecks en contenedores
+- 🐳 Usuario no-root por seguridad
+
+**Limpieza de archivos**:
+- 🧹 Eliminados archivos markdown redundantes:
+  * AUTHENTIK_SETUP.md (contenido en AUTHENTIK_INTEGRATION_GUIDE.md)
+  * QUICK_AUTH_SETUP.md (contenido en AUTHENTIK_INTEGRATION_GUIDE.md)
+  * WEB_SETUP_GUIDE.md (contenido en AUTHENTIK_INTEGRATION_GUIDE.md)
+  * START.md (contenido en README.md)
+  * DEPLOYMENT.md (contenido en AUTHENTIK_INTEGRATION_GUIDE.md)
+  * CHANGELOG.md (changelog ahora en git y en guía)
+
+**Despliegue**:
+- Opción 1: Solo app con Authentik externo
+- Opción 2: Stack completo (App + Authentik)
+- Compatible con desarrollo local y producción
+- Soporte para reverse proxy (Nginx/Traefik)
+
+**Versión de la guía**: 2.1 → 2.2
+
 ### Versión 2.1 (2025-11-21)
 
 **Nuevas características**:
@@ -1403,6 +1842,6 @@ Esta guía es de código abierto y puede ser adaptada libremente para tus proyec
 4. Verifica que estés usando las versiones correctas (Authlib >= 1.6.0)
 
 **Última actualización**: 2025-11-21
-**Versión de la guía**: 2.1
-**Compatible con**: Authentik 2024.8+, Flask 3.0+, Python 3.11+
-**Probado en producción**: MSG to EML Converter v2.1.20 en Render.com
+**Versión de la guía**: 2.2
+**Compatible con**: Authentik 2024.8+, Flask 3.0+, Python 3.11+, Docker 20.10+
+**Probado en producción**: MSG to EML Converter v2.1.20 en Render.com y Docker
