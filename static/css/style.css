@@ -19,6 +19,36 @@ body {
     max-width: 1200px;
 }
 
+/* User Info Bar */
+.user-info-bar {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: var(--border-radius);
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.user-details {
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+}
+
+.user-name {
+    font-size: 1rem;
+}
+
+.user-info-bar .btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.user-info-bar .btn-outline-light:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: white;
+}
+
 header {
     color: white;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);

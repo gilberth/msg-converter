@@ -11,6 +11,8 @@ Herramienta de Python para convertir archivos MSG de Microsoft Outlook al format
 ## Características
 
 - ✅ **Interfaz Web Moderna** - Arrastra y suelta archivos para convertir
+- ✅ **Autenticación OAuth2/OIDC** - Soporte para Authentik (opcional)
+- ✅ **Eliminación Automática** - Los archivos se borran después de 1 hora
 - ✅ Convierte archivos MSG individuales a formato EML
 - ✅ Procesamiento por lotes de múltiples archivos
 - ✅ Preserva todos los metadatos del correo (remitente, destinatarios, asunto, fecha)
@@ -70,6 +72,20 @@ Para publicar la aplicación en internet, consulta la **[Guía de Deployment](DE
 - Fly.io
 - PythonAnywhere
 - Docker
+
+#### Autenticación con Authentik (Opcional)
+
+La aplicación soporta autenticación OAuth2/OIDC con Authentik para controlar el acceso.
+
+**Configurar autenticación:**
+- Ver **[Guía de Authentik](AUTHENTIK_SETUP.md)** para instrucciones detalladas
+- Configura `ENABLE_AUTH=true` en variables de entorno
+- Funciona con grupos de usuarios
+- Sesiones configurables
+
+**Sin autenticación:**
+- Por defecto está deshabilitada (`ENABLE_AUTH=false`)
+- La aplicación es pública y accesible para todos
 
 ### Línea de Comandos (CLI)
 

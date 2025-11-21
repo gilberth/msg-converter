@@ -14,6 +14,10 @@ from werkzeug.utils import secure_filename
 from msg_to_eml_converter import MSGToEMLConverter
 import threading
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -28,6 +32,21 @@ os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 
 # Initialize converter
 converter = MSGToEMLConverter()
+
+# Initialize authentication
+from auth import AuthentikAuth, init_auth_routes
+try:
+    auth = AuthentikAuth(app)
+    init_auth_routes(app, auth)
+except Exception as e:
+    print(f"Warning: Authentication initialization failed: {e}")
+    print("Running without authentication")
+    # Create a dummy auth object
+    class DummyAuth:
+        enabled = False
+        def login_required(self, f):
+            return f
+    auth = DummyAuth()
 
 # Track conversions
 conversions = {}
@@ -66,12 +85,15 @@ cleanup_thread.start()
 
 
 @app.route('/')
+@auth.login_required
 def index():
     """Main page"""
-    return render_template('index.html')
+    user = auth.get_current_user() if auth.enabled else None
+    return render_template('index.html', user=user, auth_enabled=auth.enabled)
 
 
 @app.route('/upload', methods=['POST'])
+@auth.login_required
 def upload_file():
     """Handle file upload and conversion"""
     if 'files[]' not in request.files:
@@ -133,6 +155,7 @@ def upload_file():
 
 
 @app.route('/download/<filename>')
+@auth.login_required
 def download_file(filename):
     """Download converted EML file"""
     try:
@@ -154,6 +177,7 @@ def download_file(filename):
 
 
 @app.route('/batch-download', methods=['POST'])
+@auth.login_required
 def batch_download():
     """Download all converted files as a zip"""
     import zipfile
