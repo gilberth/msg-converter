@@ -118,7 +118,7 @@ class WebAuthentikSetup:
             'authorization_flow': auth_flow,
             'invalidation_flow': invalidation_flow,
             'client_type': 'confidential',
-            'redirect_uris': f"{self.app_url}/callback\n",  # String with newline separator
+            'redirect_uris': [f"{self.app_url}/callback"],  # List of URIs
             'sub_mode': 'hashed_user_id',
             'include_claims_in_id_token': True,
         }
