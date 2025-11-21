@@ -123,7 +123,9 @@ def init_auth_routes(app, auth):
         if not auth.enabled:
             return redirect(url_for('index'))
 
-        redirect_uri = auth.redirect_uri
+        # Use url_for to generate callback URL dynamically
+        # This ensures it matches exactly with what we use in the callback
+        redirect_uri = url_for('callback', _external=True)
         return auth.authentik.authorize_redirect(redirect_uri)
 
     @app.route('/callback')
@@ -143,12 +145,13 @@ def init_auth_routes(app, auth):
 
             # Exchange authorization code for access token using requests directly
             # This avoids Authlib's automatic id_token parsing which fails with empty JWKS (HS256)
+            # IMPORTANT: redirect_uri must match exactly what was used in authorize step
             token_response = requests.post(
                 auth.authentik.access_token_url,
                 data={
                     'grant_type': 'authorization_code',
                     'code': code,
-                    'redirect_uri': auth.redirect_uri,
+                    'redirect_uri': url_for('callback', _external=True),
                     'client_id': auth.client_id,
                     'client_secret': auth.client_secret
                 },
