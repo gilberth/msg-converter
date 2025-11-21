@@ -331,8 +331,8 @@ def init_auth_routes(app, auth):
         # Clear session
         session.clear()
 
-        # Redirect to Authentik logout
-        logout_url = f"{auth.base_url}/application/o/{auth.client_id}/end-session/"
+        # Redirect to Authentik logout (uses slug, not client_id)
+        logout_url = f"{auth.base_url}/application/o/{auth.slug}/end-session/"
         return redirect(logout_url)
 
     @app.route('/auth/status')
