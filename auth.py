@@ -185,7 +185,7 @@ def init_auth_routes(app, auth):
 
             # Get user info from userinfo endpoint using the access token
             userinfo_response = requests.get(
-                auth.authentik.userinfo_endpoint,
+                f'{auth.base_url}/application/o/userinfo/',
                 headers={'Authorization': f'Bearer {token["access_token"]}'}
             )
 
@@ -309,8 +309,9 @@ def init_auth_routes(app, auth):
                 'base_url': auth.base_url,
                 'client_id': f'{auth.client_id[:15]}...',
                 'slug': auth.slug,
-                'authorize_url': auth.authentik.authorize_url,
-                'token_url': auth.authentik.access_token_url,
+                'authorize_url': f'{auth.base_url}/application/o/authorize/',
+                'token_url': f'{auth.base_url}/application/o/token/',
+                'userinfo_url': f'{auth.base_url}/application/o/userinfo/',
             },
             'fix_instructions': {
                 'step_1': f'Go to: {auth.base_url}/if/admin/',
