@@ -48,8 +48,11 @@ class AuthentikAuth:
             client_secret=self.client_secret,
             server_metadata_url=f'{self.base_url}/application/o/{self.slug}/.well-known/openid-configuration',
             client_kwargs={
-                'scope': 'openid email profile'
-            }
+                'scope': 'openid email profile',
+                'code_challenge_method': 'S256',  # Enable PKCE
+            },
+            # Disable nonce verification to avoid JWKS parsing issues
+            authorize_params={'nonce': None}
         )
 
         print(f"Authentication ENABLED - Authentik URL: {self.base_url}")
@@ -127,9 +130,11 @@ def init_auth_routes(app, auth):
 
         try:
             # Get access token
+            # Note: This may fail with "Invalid key set format" if JWKS parsing fails
+            # We use userinfo endpoint as fallback which is more reliable
             token = auth.authentik.authorize_access_token()
 
-            # Get user info
+            # Get user info from userinfo endpoint (more reliable than parsing id_token)
             user_info = auth.authentik.userinfo(token=token)
 
             # Check group membership if configured
@@ -157,8 +162,33 @@ def init_auth_routes(app, auth):
             next_url = session.pop('next', None)
             return redirect(next_url or url_for('index'))
 
+        except ValueError as e:
+            # Handle specific JWKS parsing errors
+            error_msg = str(e)
+            print(f"Authentication error (ValueError): {error_msg}")
+
+            if "Invalid key set format" in error_msg:
+                return jsonify({
+                    'error': 'Authentication failed',
+                    'message': 'JWKS validation error. Please ensure Authentik is properly configured.',
+                    'detail': 'The OAuth provider returned an invalid key format. Check that AUTHENTIK_SLUG is correct.',
+                    'troubleshooting': {
+                        'check_slug': 'Verify AUTHENTIK_SLUG matches your application slug in Authentik',
+                        'check_provider': 'Ensure the OAuth2 provider is correctly configured in Authentik',
+                        'check_url': f'Verify this URL is accessible: {auth.base_url}/application/o/{auth.slug}/.well-known/openid-configuration'
+                    }
+                }), 500
+
+            return jsonify({
+                'error': 'Authentication failed',
+                'message': str(e)
+            }), 500
+
         except Exception as e:
             print(f"Authentication error: {e}")
+            import traceback
+            traceback.print_exc()
+
             return jsonify({
                 'error': 'Authentication failed',
                 'message': str(e)

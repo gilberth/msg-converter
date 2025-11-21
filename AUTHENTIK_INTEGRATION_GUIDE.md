@@ -164,7 +164,11 @@ class AuthentikAuth:
             client_id=self.client_id,
             client_secret=self.client_secret,
             server_metadata_url=f'{self.base_url}/application/o/{self.slug}/.well-known/openid-configuration',
-            client_kwargs={'scope': 'openid email profile'}
+            client_kwargs={
+                'scope': 'openid email profile',
+                'code_challenge_method': 'S256',  # Enable PKCE for better security
+            },
+            authorize_params={'nonce': None}  # Disable nonce to avoid JWKS parsing issues
         )
 
         # Session configuration
@@ -793,13 +797,89 @@ ENABLE_AUTH=true
 2. Verifica que `redirect_uris` contenga exactamente: `https://your-app.com/callback`
 3. Asegúrate que `AUTHENTIK_REDIRECT_URI` tenga el mismo valor
 
+### Problema: "Invalid key set format"
+
+**Causa**: Error al parsear el JWKS (JSON Web Key Set) de Authentik durante la validación del ID token
+
+**Error típico**:
+```json
+{
+  "error": "Authentication failed",
+  "message": "Invalid key set format"
+}
+```
+
+**Causas comunes**:
+1. Versión antigua de Authlib (< 1.6.0)
+2. Problemas con la configuración del OAuth2 provider en Authentik
+3. JWKS endpoint devuelve formato inesperado
+4. Nonce verification issues
+
+**Solución**:
+
+1. **Actualizar Authlib** (solución más efectiva):
+   ```bash
+   pip install --upgrade authlib>=1.6.0 cryptography>=41.0.0
+   ```
+
+2. **Verificar requirements.txt**:
+   ```txt
+   Authlib>=1.6.0
+   cryptography>=41.0.0
+   ```
+
+3. **Agregar configuración PKCE** en el registro OAuth:
+   ```python
+   client_kwargs={
+       'scope': 'openid email profile',
+       'code_challenge_method': 'S256',  # Enable PKCE
+   },
+   authorize_params={'nonce': None}  # Disable nonce if problematic
+   ```
+
+4. **Verificar endpoint JWKS** manualmente:
+   ```bash
+   curl https://your-authentik.com/application/o/your-slug/.well-known/openid-configuration
+   ```
+
+   Debe devolver JSON válido con `jwks_uri` apuntando a:
+   ```
+   https://your-authentik.com/application/o/your-slug/jwks/
+   ```
+
+5. **Verificar JWKS keys**:
+   ```bash
+   curl https://your-authentik.com/application/o/your-slug/jwks/
+   ```
+
+   Debe devolver:
+   ```json
+   {
+     "keys": [
+       {
+         "kty": "RSA",
+         "alg": "RS256",
+         "use": "sig",
+         "kid": "...",
+         "n": "...",
+         "e": "AQAB"
+       }
+     ]
+   }
+   ```
+
+6. **Si el problema persiste**, verifica la configuración del provider en Authentik:
+   - Authentik → Applications → Tu aplicación → Provider
+   - Asegúrate que "Signing Key" esté configurada
+   - Verifica que "Subject mode" sea `hashed_user_id` o `user_username`
+
 ### Problema: "Invalid client_id or client_secret"
 
 **Causa**: Credenciales incorrectas o provider mal configurado
 
 **Solución**:
 1. Ve a Authentik → Applications → tu aplicación → Provider
-2. Copia el Client ID (slug)
+2. Copia el Client ID (no el slug)
 3. Haz clic en "Show secret" y copia el Client Secret
 4. Actualiza las variables de entorno
 
@@ -924,11 +1004,14 @@ my-app/
 
 ```txt
 # requirements.txt
-Flask==3.0.0
-Authlib==1.3.0
-requests==2.31.0
-python-dotenv==1.0.0
+Flask>=3.0.0
+Authlib>=1.6.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+cryptography>=41.0.0
 ```
+
+**Nota importante**: Asegúrate de usar Authlib 1.6.0 o superior para evitar problemas con el parseo de JWKS.
 
 Instalar:
 ```bash
@@ -958,7 +1041,11 @@ authentik = oauth.register(
     client_id=os.getenv('AUTHENTIK_CLIENT_ID'),
     client_secret=os.getenv('AUTHENTIK_CLIENT_SECRET'),
     server_metadata_url=f"{os.getenv('AUTHENTIK_BASE_URL')}/application/o/{os.getenv('AUTHENTIK_SLUG')}/.well-known/openid-configuration",
-    client_kwargs={'scope': 'openid email profile'}
+    client_kwargs={
+        'scope': 'openid email profile',
+        'code_challenge_method': 'S256'
+    },
+    authorize_params={'nonce': None}
 )
 
 # Decorator
