@@ -113,12 +113,18 @@ class WebAuthentikSetup:
             invalidation_flow = auth_flow
 
         # Create provider with correct structure
+        # Note: Authentik 2024.8+ requires redirect_uris as list of objects
         provider_data = {
             'name': self.app_name,
             'authorization_flow': auth_flow,
             'invalidation_flow': invalidation_flow,
             'client_type': 'confidential',
-            'redirect_uris': [f"{self.app_url}/callback"],  # List of URIs
+            'redirect_uris': [
+                {
+                    'matching_mode': 'strict',
+                    'url': f"{self.app_url}/callback"
+                }
+            ],
             'sub_mode': 'hashed_user_id',
             'include_claims_in_id_token': True,
         }
