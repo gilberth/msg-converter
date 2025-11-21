@@ -15,6 +15,7 @@ from msg_to_eml_converter import MSGToEMLConverter
 import threading
 import time
 from dotenv import load_dotenv
+from version import __version__, __version_name__
 
 # Load environment variables from .env file
 load_dotenv()
@@ -57,8 +58,10 @@ def setup_page():
     """Setup wizard page"""
     # Check if already configured
     if auth.enabled:
-        return render_template('setup.html', already_configured=True)
-    return render_template('setup.html', already_configured=False)
+        return render_template('setup.html', already_configured=True,
+                             version=__version__, version_name=__version_name__)
+    return render_template('setup.html', already_configured=False,
+                         version=__version__, version_name=__version_name__)
 
 @app.route('/setup/configure', methods=['POST'])
 def setup_configure():
@@ -144,7 +147,8 @@ cleanup_thread.start()
 def index():
     """Main page"""
     user = auth.get_current_user() if auth.enabled else None
-    return render_template('index.html', user=user, auth_enabled=auth.enabled)
+    return render_template('index.html', user=user, auth_enabled=auth.enabled,
+                         version=__version__, version_name=__version_name__)
 
 
 @app.route('/upload', methods=['POST'])
