@@ -549,17 +549,31 @@ def callback():
         return redirect(url_for('index'))
 
     try:
-        # Exchange code for token (without parsing id_token)
-        # Use fetch_token() to avoid JWKS validation issues with HS256
-        token = auth.authentik.fetch_token(
+        # Get authorization code from callback URL
+        code = request.args.get('code')
+        if not code:
+            return jsonify({'error': 'No authorization code'}), 400
+
+        # Exchange code for access token using requests (avoids JWKS parsing)
+        token_response = requests.post(
             auth.authentik.access_token_url,
-            grant_type='authorization_code',
-            authorization_response=request.url,
-            redirect_uri=url_for('callback', _external=True)
+            data={
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': url_for('callback', _external=True),
+                'client_id': auth.client_id,
+                'client_secret': auth.client_secret
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
         )
+        token = token_response.json()
 
         # Get user info from userinfo endpoint
-        user_info = auth.authentik.userinfo(token=token)
+        userinfo_response = requests.get(
+            auth.authentik.userinfo_endpoint,
+            headers={'Authorization': f'Bearer {token["access_token"]}'}
+        )
+        user_info = userinfo_response.json()
 
         # Store in session
         session['user'] = {
@@ -904,26 +918,45 @@ curl https://your-authentik.com/application/o/your-slug/jwks/
    userinfo_endpoint=f'{base_url}/application/o/userinfo/',
    ```
 
-   **b) Usar `fetch_token()` en lugar de `authorize_access_token()`** en el callback:
+   **b) Usar `requests` directamente en el callback** para evitar Authlib completamente:
    ```python
+   import requests
+
    # ❌ NO uses esto (intenta parsear id_token):
    token = oauth_client.authorize_access_token()
 
-   # ✅ USA esto (solo obtiene access token):
-   token = oauth_client.fetch_token(
-       oauth_client.access_token_url,
-       grant_type='authorization_code',
-       authorization_response=request.url,
-       redirect_uri=redirect_uri
+   # ✅ USA esto (intercambio manual de token):
+   # Get authorization code
+   code = request.args.get('code')
+
+   # Exchange code for access token
+   token_response = requests.post(
+       token_url,
+       data={
+           'grant_type': 'authorization_code',
+           'code': code,
+           'redirect_uri': redirect_uri,
+           'client_id': client_id,
+           'client_secret': client_secret
+       },
+       headers={'Content-Type': 'application/x-www-form-urlencoded'}
    )
+   token = token_response.json()
+
+   # Get user info
+   userinfo_response = requests.get(
+       userinfo_url,
+       headers={'Authorization': f'Bearer {token["access_token"]}'}
+   )
+   user_info = userinfo_response.json()
    ```
 
    **Por qué**:
    - `server_metadata_url` hace que Authlib descargue configuración OIDC e intente validar el id_token con JWKS
-   - `authorize_access_token()` también intenta parsear y validar el id_token automáticamente
-   - Con JWKS vacío (HS256), ambos fallan con "Invalid key set format" o "Missing jwks_uri"
-   - La configuración manual + `fetch_token()` evita completamente la validación de id_token
-   - Solo usa el userinfo endpoint que siempre funciona
+   - `authorize_access_token()` y `fetch_token()` también intentan parsear y validar el id_token
+   - Con JWKS vacío (HS256), fallan con "Invalid key set format", "Missing jwks_uri" o "'FlaskOAuth2App' object has no attribute 'fetch_token'"
+   - Usar `requests` directamente evita completamente todos los métodos de Authlib que intentan validar JWKS
+   - Solo hace el intercambio básico de OAuth2: code → access_token → userinfo
 
 ### Problema: "Invalid client_id or client_secret"
 
@@ -1079,7 +1112,8 @@ Aquí hay un ejemplo mínimo funcional:
 ```python
 # app.py - Aplicación completa mínima
 import os
-from flask import Flask, render_template_string, session, redirect, url_for
+import requests
+from flask import Flask, render_template_string, session, redirect, url_for, request
 from authlib.integrations.flask_client import OAuth
 from functools import wraps
 
@@ -1122,15 +1156,29 @@ def login():
 
 @app.route('/callback')
 def callback():
-    # Use fetch_token to avoid JWKS validation with HS256
-    token = authentik.fetch_token(
+    # Use requests directly to avoid JWKS validation with HS256
+    code = request.args.get('code')
+
+    # Exchange code for access token
+    token_response = requests.post(
         authentik.access_token_url,
-        grant_type='authorization_code',
-        authorization_response=request.url,
-        redirect_uri=url_for('callback', _external=True)
+        data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': url_for('callback', _external=True),
+            'client_id': os.getenv('AUTHENTIK_CLIENT_ID'),
+            'client_secret': os.getenv('AUTHENTIK_CLIENT_SECRET')
+        }
     )
-    # Get user info from userinfo endpoint
-    user = authentik.userinfo(token=token)
+    token = token_response.json()
+
+    # Get user info
+    userinfo_response = requests.get(
+        authentik.userinfo_endpoint,
+        headers={'Authorization': f'Bearer {token["access_token"]}'}
+    )
+    user = userinfo_response.json()
+
     session['user'] = {'name': user.get('name', 'User'), 'email': user.get('email')}
     return redirect(url_for('index'))
 

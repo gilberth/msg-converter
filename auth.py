@@ -4,6 +4,7 @@ Authentication module for Authentik OAuth2/OIDC
 """
 
 import os
+import requests
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
 from authlib.integrations.flask_client import OAuth
@@ -132,18 +133,49 @@ def init_auth_routes(app, auth):
             return redirect(url_for('index'))
 
         try:
-            # Get access token without parsing id_token
-            # Using fetch_token() instead of authorize_access_token() to avoid JWKS validation
-            # This is necessary when using HS256 with empty JWKS
-            token = auth.authentik.fetch_token(
+            # Get authorization code from callback URL
+            code = request.args.get('code')
+            if not code:
+                return jsonify({
+                    'error': 'Authentication failed',
+                    'message': 'No authorization code received'
+                }), 400
+
+            # Exchange authorization code for access token using requests directly
+            # This avoids Authlib's automatic id_token parsing which fails with empty JWKS (HS256)
+            token_response = requests.post(
                 auth.authentik.access_token_url,
-                grant_type='authorization_code',
-                authorization_response=request.url,
-                redirect_uri=auth.redirect_uri
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': auth.redirect_uri,
+                    'client_id': auth.client_id,
+                    'client_secret': auth.client_secret
+                },
+                headers={'Content-Type': 'application/x-www-form-urlencoded'}
             )
 
-            # Get user info from userinfo endpoint (more reliable than parsing id_token)
-            user_info = auth.authentik.userinfo(token=token)
+            if token_response.status_code != 200:
+                return jsonify({
+                    'error': 'Token exchange failed',
+                    'message': f'Failed to exchange authorization code: {token_response.text}'
+                }), token_response.status_code
+
+            token = token_response.json()
+
+            # Get user info from userinfo endpoint using the access token
+            userinfo_response = requests.get(
+                auth.authentik.userinfo_endpoint,
+                headers={'Authorization': f'Bearer {token["access_token"]}'}
+            )
+
+            if userinfo_response.status_code != 200:
+                return jsonify({
+                    'error': 'Failed to get user info',
+                    'message': f'Userinfo endpoint returned: {userinfo_response.text}'
+                }), userinfo_response.status_code
+
+            user_info = userinfo_response.json()
 
             # Check group membership if configured
             if auth.allowed_groups and not auth.check_group_membership(user_info):
