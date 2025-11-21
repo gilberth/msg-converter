@@ -51,6 +51,61 @@ except Exception as e:
 # Track conversions
 conversions = {}
 
+# Setup wizard routes
+@app.route('/setup')
+def setup_page():
+    """Setup wizard page"""
+    # Check if already configured
+    if auth.enabled:
+        return render_template('setup.html', already_configured=True)
+    return render_template('setup.html', already_configured=False)
+
+@app.route('/setup/configure', methods=['POST'])
+def setup_configure():
+    """Handle setup configuration"""
+    from web_setup import WebAuthentikSetup
+
+    try:
+        data = request.json
+        authentik_url = data.get('authentik_url', '').strip()
+        api_token = data.get('api_token', '').strip()
+        app_url = data.get('app_url', '').strip()
+
+        if not all([authentik_url, api_token, app_url]):
+            return jsonify({
+                'success': False,
+                'error': 'All fields are required'
+            }), 400
+
+        # Execute setup
+        setup = WebAuthentikSetup(authentik_url, api_token, app_url)
+        result = setup.setup()
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Configuration completed successfully!',
+                'details': {
+                    'client_id': result.get('client_id'),
+                    'redirect_uri': result.get('redirect_uri'),
+                    'provider_message': result.get('provider_message'),
+                    'app_message': result.get('app_message')
+                },
+                'next_step': 'Please restart the application for changes to take effect.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Setup failed'),
+                'step': result.get('step')
+            }), 400
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error: {str(e)}'
+        }), 500
+
 
 def allowed_file(filename):
     """Check if file extension is allowed"""

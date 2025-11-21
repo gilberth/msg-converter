@@ -40,6 +40,15 @@
             <p class="lead text-muted">Convierte archivos de Microsoft Outlook MSG a formato EML estándar</p>
             {% if auth_enabled %}
             <p class="text-muted"><small><i class="bi bi-shield-check"></i> Aplicación protegida con Authentik</small></p>
+            {% else %}
+            <p class="text-muted">
+                <small>
+                    <i class="bi bi-unlock me-1"></i>Acceso público •
+                    <a href="/setup" class="text-white" style="text-decoration: underline;">
+                        <i class="bi bi-gear-fill me-1"></i>Configurar autenticación
+                    </a>
+                </small>
+            </p>
             {% endif %}
         </header>
 

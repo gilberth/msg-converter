@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración de Authentik - MSG to EML Converter</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        .setup-container {
+            max-width: 700px;
+            margin: 50px auto;
+        }
+
+        .setup-card {
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .setup-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border-bottom: 3px solid #e0e0e0;
+            color: #999;
+        }
+
+        .step.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .step.completed {
+            border-bottom-color: #28a745;
+            color: #28a745;
+        }
+
+        .form-section {
+            display: none;
+        }
+
+        .form-section.active {
+            display: block;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success-checkmark {
+            font-size: 60px;
+            color: #28a745;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        @keyframes scaleIn {
+            0% {
+                transform: scale(0);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="card setup-card">
+            <div class="setup-header text-center">
+                <i class="bi bi-gear-fill" style="font-size: 3rem;"></i>
+                <h2 class="mt-3 mb-2">Configuración de Authentik</h2>
+                <p class="mb-0">Wizard de configuración automática</p>
+            </div>
+
+            <div class="card-body p-4">
+                {% if already_configured %}
+                <!-- Already Configured Message -->
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h3 class="mt-4">Authentik ya está configurado</h3>
+                    <p class="text-muted">La autenticación está habilitada y funcionando correctamente.</p>
+                    <div class="mt-4">
+                        <a href="/" class="btn btn-primary">
+                            <i class="bi bi-house-fill me-2"></i>Ir al inicio
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Setup Wizard -->
+                <div class="step-indicator">
+                    <div class="step active" id="step-1-indicator">
+                        <i class="bi bi-1-circle-fill"></i>
+                        <div class="small">Información</div>
+                    </div>
+                    <div class="step" id="step-2-indicator">
+                        <i class="bi bi-2-circle-fill"></i>
+                        <div class="small">Configuración</div>
+                    </div>
+                    <div class="step" id="step-3-indicator">
+                        <i class="bi bi-3-circle-fill"></i>
+                        <div class="small">Completado</div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Information -->
+                <div class="form-section active" id="step-1">
+                    <h4><i class="bi bi-info-circle me-2"></i>Bienvenido al wizard de configuración</h4>
+                    <p>Este wizard te ayudará a configurar la autenticación con Authentik de forma automática.</p>
+
+                    <div class="info-box">
+                        <h6><i class="bi bi-lightning-fill me-2"></i>Lo que necesitas:</h6>
+                        <ul class="mb-0">
+                            <li>URL de tu instancia de Authentik</li>
+                            <li>Token de API de Authentik (con permisos 'view' y 'write')</li>
+                            <li>URL de esta aplicación</li>
+                        </ul>
+                    </div>
+
+                    <div class="info-box">
+                        <h6><i class="bi bi-check2-all me-2"></i>Lo que hará automáticamente:</h6>
+                        <ul class="mb-0">
+                            <li>Crear Provider OAuth2 en Authentik</li>
+                            <li>Crear Application en Authentik</li>
+                            <li>Generar credenciales (Client ID y Secret)</li>
+                            <li>Configurar las variables de entorno</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Importante:</strong> Necesitas crear un token de API en Authentik antes de continuar.
+                        <br><small>Ve a <strong>Directory → Tokens</strong> y crea uno con scopes 'view' y 'write'.</small>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary btn-lg" onclick="nextStep(2)">
+                            Continuar <i class="bi bi-arrow-right ms-2"></i>
+                        </button>
+                        <a href="/" class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </div>
+
+                <!-- Step 2: Configuration Form -->
+                <div class="form-section" id="step-2">
+                    <h4><i class="bi bi-sliders me-2"></i>Configuración de Authentik</h4>
+                    <p>Ingresa los datos de tu instancia de Authentik:</p>
+
+                    <form id="setup-form">
+                        <div class="mb-3">
+                            <label for="authentik_url" class="form-label">
+                                <i class="bi bi-link-45deg me-1"></i>URL de Authentik
+                            </label>
+                            <input type="url" class="form-control" id="authentik_url"
+                                   placeholder="https://auth.ejemplo.com" required>
+                            <div class="form-text">La URL completa de tu instancia de Authentik (sin / al final)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="api_token" class="form-label">
+                                <i class="bi bi-key-fill me-1"></i>Token de API
+                            </label>
+                            <input type="password" class="form-control" id="api_token"
+                                   placeholder="ak_xxxxxxxxxxxxx" required>
+                            <div class="form-text">Token de API con permisos 'view' y 'write'</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="app_url" class="form-label">
+                                <i class="bi bi-globe me-1"></i>URL de la aplicación
+                            </label>
+                            <input type="url" class="form-control" id="app_url"
+                                   value="{{ request.url_root[:-1] }}" required>
+                            <div class="form-text">La URL donde está desplegada esta aplicación</div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success btn-lg" id="configure-btn">
+                                <i class="bi bi-magic me-2"></i>Configurar automáticamente
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="previousStep(1)">
+                                <i class="bi bi-arrow-left me-2"></i>Atrás
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Progress/Error Display -->
+                    <div id="setup-progress" class="mt-4" style="display: none;">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Configurando...</span>
+                            </div>
+                            <p class="mt-3" id="progress-message">Configurando Authentik...</p>
+                        </div>
+                    </div>
+
+                    <div id="setup-error" class="alert alert-danger mt-4" style="display: none;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Error:</strong> <span id="error-message"></span>
+                    </div>
+                </div>
+
+                <!-- Step 3: Success -->
+                <div class="form-section" id="step-3">
+                    <div class="text-center py-4">
+                        <i class="bi bi-check-circle-fill success-checkmark"></i>
+                        <h3 class="mt-4">¡Configuración completada!</h3>
+                        <p class="text-muted">Authentik se ha configurado correctamente</p>
+                    </div>
+
+                    <div class="card bg-light mb-3" id="success-details">
+                        <!-- Details will be inserted here -->
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Próximo paso:</strong> <span id="next-step-text"></span>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="/" class="btn btn-primary btn-lg">
+                            <i class="bi bi-house-fill me-2"></i>Ir a la aplicación
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <small class="text-white">
+                ¿Necesitas ayuda? Consulta la
+                <a href="https://github.com/your-repo/QUICK_AUTH_SETUP.md" target="_blank" class="text-white">
+                    <u>documentación</u>
+                </a>
+            </small>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        function nextStep(step) {
+            // Hide all sections
+            document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+
+            // Show target section
+            document.getElementById(`step-${step}`).classList.add('active');
+            document.getElementById(`step-${step}-indicator`).classList.add('active');
+
+            // Mark previous steps as completed
+            for (let i = 1; i < step; i++) {
+                document.getElementById(`step-${i}-indicator`).classList.add('completed');
+            }
+        }
+
+        function previousStep(step) {
+            nextStep(step);
+        }
+
+        // Handle form submission
+        document.getElementById('setup-form')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const configureBtn = document.getElementById('configure-btn');
+            const progressDiv = document.getElementById('setup-progress');
+            const errorDiv = document.getElementById('setup-error');
+
+            // Get form data
+            const data = {
+                authentik_url: document.getElementById('authentik_url').value,
+                api_token: document.getElementById('api_token').value,
+                app_url: document.getElementById('app_url').value
+            };
+
+            // Show progress
+            configureBtn.disabled = true;
+            progressDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/setup/configure', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show success step
+                    progressDiv.style.display = 'none';
+
+                    // Populate success details
+                    const detailsHtml = `
+                        <div class="card-body">
+                            <h6><i class="bi bi-check-circle me-2"></i>Detalles de la configuración:</h6>
+                            <ul class="mb-0">
+                                <li><strong>Provider:</strong> ${result.details.provider_message}</li>
+                                <li><strong>Application:</strong> ${result.details.app_message}</li>
+                                <li><strong>Client ID:</strong> <code>${result.details.client_id}</code></li>
+                                <li><strong>Redirect URI:</strong> <code>${result.details.redirect_uri}</code></li>
+                            </ul>
+                        </div>
+                    `;
+                    document.getElementById('success-details').innerHTML = detailsHtml;
+                    document.getElementById('next-step-text').textContent = result.next_step;
+
+                    nextStep(3);
+                } else {
+                    // Show error
+                    progressDiv.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                    document.getElementById('error-message').textContent = result.error;
+                    configureBtn.disabled = false;
+                }
+            } catch (error) {
+                progressDiv.style.display = 'none';
+                errorDiv.style.display = 'block';
+                document.getElementById('error-message').textContent = 'Error de conexión: ' + error.message;
+                configureBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -77,11 +77,20 @@ Para publicar la aplicación en internet, consulta la **[Guía de Deployment](DE
 
 La aplicación soporta autenticación OAuth2/OIDC con Authentik para controlar el acceso.
 
-**⚡ Auto-Configuración (Recomendado - 3 minutos):**
+**🌐 Wizard Web (Recomendado para apps desplegadas - 5 minutos):**
+```
+https://tu-app.onrender.com/setup
+```
+- Configuración desde el navegador, sin terminal
+- Perfecto para Render, Railway, Fly.io
+- Ver **[Guía Web Setup](WEB_SETUP_GUIDE.md)** para instrucciones
+- Aparece link "Configurar autenticación" en la página principal
+
+**⚡ Auto-Configuración CLI (Para desarrollo local - 3 minutos):**
 ```bash
 python authentik_auto_setup.py
 ```
-- Ver **[Guía Rápida](QUICK_AUTH_SETUP.md)** para configuración automática
+- Ver **[Guía Rápida CLI](QUICK_AUTH_SETUP.md)** para configuración desde terminal
 - Solo necesitas: URL de Authentik + Token de API
 - El script crea todo automáticamente
 
