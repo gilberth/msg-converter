@@ -44,6 +44,7 @@ class AuthentikAuth:
         # Register Authentik provider
         # Note: The OIDC discovery URL uses the application slug, not the client_id
         # Note: Manual configuration to avoid JWKS validation issues when using HS256
+        # Note: PKCE disabled because we use manual token exchange with requests
         self.authentik = self.oauth.register(
             name='authentik',
             client_id=self.client_id,
@@ -55,7 +56,7 @@ class AuthentikAuth:
             userinfo_endpoint=f'{self.base_url}/application/o/userinfo/',
             client_kwargs={
                 'scope': 'openid email profile',
-                'code_challenge_method': 'S256',  # Enable PKCE
+                # PKCE disabled - manual token exchange with requests doesn't support it
             }
         )
 
