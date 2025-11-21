@@ -74,13 +74,17 @@ class WebAuthentikSetup:
             return {'success': True}
         return result
 
-    def get_default_flow(self):
-        """Get default authentication flow"""
+    def get_default_flow(self, flow_type='authentication'):
+        """Get default flow by type"""
         flows = self.api_request('GET', 'flows/instances/')
         if flows and 'error' not in flows:
+            # Try to find flow by type
             for flow in flows.get('results', []):
-                if 'authentication' in flow.get('slug', '').lower():
+                slug = flow.get('slug', '').lower()
+                designation = flow.get('designation', '').lower()
+                if flow_type in slug or flow_type in designation:
                     return flow['pk']
+            # Fallback to first flow
             if flows.get('results'):
                 return flows['results'][0]['pk']
         return None
@@ -98,17 +102,23 @@ class WebAuthentikSetup:
                         'message': 'Using existing provider'
                     }
 
-        # Get default flow
-        flow = self.get_default_flow()
-        if not flow:
+        # Get required flows
+        auth_flow = self.get_default_flow('authentication')
+        if not auth_flow:
             return {'error': 'Could not find authentication flow'}
 
-        # Create provider
+        invalidation_flow = self.get_default_flow('invalidation')
+        if not invalidation_flow:
+            # Try to get any flow as fallback
+            invalidation_flow = auth_flow
+
+        # Create provider with correct structure
         provider_data = {
             'name': self.app_name,
-            'authorization_flow': flow,
+            'authorization_flow': auth_flow,
+            'invalidation_flow': invalidation_flow,
             'client_type': 'confidential',
-            'redirect_uris': [f"{self.app_url}/callback"],  # Must be a list!
+            'redirect_uris': f"{self.app_url}/callback\n",  # String with newline separator
             'sub_mode': 'hashed_user_id',
             'include_claims_in_id_token': True,
         }
