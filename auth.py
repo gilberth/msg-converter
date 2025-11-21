@@ -132,10 +132,15 @@ def init_auth_routes(app, auth):
             return redirect(url_for('index'))
 
         try:
-            # Get access token
-            # Note: This may fail with "Invalid key set format" if JWKS parsing fails
-            # We use userinfo endpoint as fallback which is more reliable
-            token = auth.authentik.authorize_access_token()
+            # Get access token without parsing id_token
+            # Using fetch_token() instead of authorize_access_token() to avoid JWKS validation
+            # This is necessary when using HS256 with empty JWKS
+            token = auth.authentik.fetch_token(
+                auth.authentik.access_token_url,
+                grant_type='authorization_code',
+                authorization_response=request.url,
+                redirect_uri=auth.redirect_uri
+            )
 
             # Get user info from userinfo endpoint (more reliable than parsing id_token)
             user_info = auth.authentik.userinfo(token=token)

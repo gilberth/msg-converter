@@ -549,15 +549,21 @@ def callback():
         return redirect(url_for('index'))
 
     try:
-        # Exchange code for token
-        token = auth.authentik.authorize_access_token()
+        # Exchange code for token (without parsing id_token)
+        # Use fetch_token() to avoid JWKS validation issues with HS256
+        token = auth.authentik.fetch_token(
+            auth.authentik.access_token_url,
+            grant_type='authorization_code',
+            authorization_response=request.url,
+            redirect_uri=url_for('callback', _external=True)
+        )
 
-        # Get user info
-        user_info = auth.authentik.parse_id_token(token)
+        # Get user info from userinfo endpoint
+        user_info = auth.authentik.userinfo(token=token)
 
         # Store in session
         session['user'] = {
-            'sub': user_info['sub'],
+            'sub': user_info.get('sub'),
             'email': user_info.get('email', ''),
             'name': user_info.get('name', user_info.get('preferred_username', 'User')),
             'groups': user_info.get('groups', [])
@@ -885,8 +891,9 @@ curl https://your-authentik.com/application/o/your-slug/jwks/
 
 7. **SOLUCIÓN DEFINITIVA para JWKS vacío con HS256**:
 
-   Si tu endpoint JWKS devuelve `{}` (vacío) y usas algoritmo HS256, **no puedes usar `server_metadata_url`**. En su lugar, configura manualmente los endpoints:
+   Si tu endpoint JWKS devuelve `{}` (vacío) y usas algoritmo HS256, necesitas dos cambios:
 
+   **a) Configurar manualmente los endpoints** (sin `server_metadata_url`):
    ```python
    # ❌ NO uses esto si JWKS está vacío:
    server_metadata_url=f'{base_url}/application/o/{slug}/.well-known/openid-configuration'
@@ -897,9 +904,26 @@ curl https://your-authentik.com/application/o/your-slug/jwks/
    userinfo_endpoint=f'{base_url}/application/o/userinfo/',
    ```
 
-   **Por qué**: Cuando usas `server_metadata_url`, Authlib automáticamente descarga la configuración OIDC e intenta validar el id_token usando el JWKS. Si el JWKS está vacío (porque usas HS256), falla con "Invalid key set format".
+   **b) Usar `fetch_token()` en lugar de `authorize_access_token()`** en el callback:
+   ```python
+   # ❌ NO uses esto (intenta parsear id_token):
+   token = oauth_client.authorize_access_token()
 
-   La configuración manual evita el JWKS y solo usa el userinfo endpoint, que es más confiable.
+   # ✅ USA esto (solo obtiene access token):
+   token = oauth_client.fetch_token(
+       oauth_client.access_token_url,
+       grant_type='authorization_code',
+       authorization_response=request.url,
+       redirect_uri=redirect_uri
+   )
+   ```
+
+   **Por qué**:
+   - `server_metadata_url` hace que Authlib descargue configuración OIDC e intente validar el id_token con JWKS
+   - `authorize_access_token()` también intenta parsear y validar el id_token automáticamente
+   - Con JWKS vacío (HS256), ambos fallan con "Invalid key set format" o "Missing jwks_uri"
+   - La configuración manual + `fetch_token()` evita completamente la validación de id_token
+   - Solo usa el userinfo endpoint que siempre funciona
 
 ### Problema: "Invalid client_id or client_secret"
 
@@ -1098,8 +1122,15 @@ def login():
 
 @app.route('/callback')
 def callback():
-    token = authentik.authorize_access_token()
-    user = authentik.parse_id_token(token)
+    # Use fetch_token to avoid JWKS validation with HS256
+    token = authentik.fetch_token(
+        authentik.access_token_url,
+        grant_type='authorization_code',
+        authorization_response=request.url,
+        redirect_uri=url_for('callback', _external=True)
+    )
+    # Get user info from userinfo endpoint
+    user = authentik.userinfo(token=token)
     session['user'] = {'name': user.get('name', 'User'), 'email': user.get('email')}
     return redirect(url_for('index'))
 
