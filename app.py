@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from msg_to_eml_converter import MSGToEMLConverter
 import threading
 import time
@@ -21,6 +22,11 @@ from version import __version__, __version_name__
 load_dotenv()
 
 app = Flask(__name__)
+
+# Fix for running behind proxy (Render, Heroku, etc.)
+# This ensures Flask correctly detects HTTPS protocol and generates proper URLs
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -143,9 +149,16 @@ cleanup_thread.start()
 
 
 @app.route('/')
-@auth.login_required
 def index():
-    """Main page"""
+    """Main page - shows welcome screen if not authenticated"""
+    # If authentication is enabled and user is not logged in, show welcome page
+    if auth.enabled and not auth.is_authenticated():
+        return render_template('welcome.html',
+                             auth_enabled=auth.enabled,
+                             version=__version__,
+                             version_name=__version_name__)
+
+    # User is authenticated or auth is disabled - show converter
     user = auth.get_current_user() if auth.enabled else None
     return render_template('index.html', user=user, auth_enabled=auth.enabled,
                          version=__version__, version_name=__version_name__)
