@@ -260,15 +260,17 @@ def init_auth_routes(app, auth):
             session_lifetime = int(os.environ.get('SESSION_LIFETIME_HOURS', '24'))
             expires_at = datetime.now() + timedelta(hours=session_lifetime)
 
-            # Store user info in session
+            # Store user info in session (minimal data to avoid cookie size limit)
             session['user'] = {
                 'email': user_info.get('email'),
                 'name': user_info.get('name'),
                 'preferred_username': user_info.get('preferred_username'),
                 'groups': user_info.get('groups', [])
             }
-            session['token'] = token
+            # Don't store full tokens - they're too large for cookies (>4KB limit)
+            # Only store expiration time
             session['expires_at'] = expires_at.isoformat()
+            session['authenticated'] = True
 
             # Redirect to original URL or home
             next_url = session.pop('next', None)
