@@ -265,3 +265,53 @@ def init_auth_routes(app, auth):
             'authenticated': auth.is_authenticated(),
             'user': auth.get_current_user()
         })
+
+    @app.route('/auth/debug')
+    def auth_debug():
+        """Debug endpoint to show OAuth2 configuration and redirect_uri"""
+        if not auth.enabled:
+            return jsonify({'error': 'Authentication is disabled'})
+
+        callback_url = url_for('callback', _external=True)
+
+        debug_info = {
+            'CRITICAL_CHECK': {
+                'flask_generates_this_url': callback_url,
+                'authentik_must_have_EXACTLY_this': callback_url,
+                'case_sensitive': True,
+                'must_match_exactly': 'YES - Even one character difference causes invalid_grant',
+            },
+            'flask_environment': {
+                'protocol': request.scheme,
+                'host': request.host,
+                'is_secure': request.is_secure,
+                'url_root': request.url_root,
+                'callback_endpoint': url_for('callback', _external=True),
+            },
+            'authentik_config': {
+                'base_url': auth.base_url,
+                'client_id': f'{auth.client_id[:15]}...',
+                'slug': auth.slug,
+                'authorize_url': auth.authentik.authorize_url,
+                'token_url': auth.authentik.access_token_url,
+            },
+            'fix_instructions': {
+                'step_1': f'Go to: {auth.base_url}/if/admin/',
+                'step_2': 'Navigate to: Applications → Applications',
+                'step_3': 'Find your app (MSG to EML Converter)',
+                'step_4': 'Click on it → Go to Provider tab',
+                'step_5': f'Add/Edit Redirect URI to EXACTLY: {callback_url}',
+                'step_6': 'Make sure matching_mode is "strict"',
+                'step_7': 'Save and try login again',
+            },
+            'authentik_2024_note': 'Authentik 2024.8.5+ and 2024.10.3+ use STRICT matching (CVE-2024-52289 fix)',
+            'common_mistakes': [
+                'http:// vs https://',
+                'Trailing slash: /callback vs /callback/',
+                'Case mismatch: /Callback vs /callback',
+                'Wrong domain',
+                'Port number mismatch'
+            ]
+        }
+
+        return jsonify(debug_info)
