@@ -4,6 +4,7 @@ Authentication module for Authentik OAuth2/OIDC
 """
 
 import os
+import json
 import requests
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
@@ -184,40 +185,69 @@ def init_auth_routes(app, auth):
 
             token = token_response.json()
 
-            # Debug: Log token info (without exposing the actual token)
-            print(f"Token exchange successful. Token type: {token.get('token_type', 'unknown')}")
+            # Debug: Log full token response (without exposing the actual token)
+            print(f"=== TOKEN EXCHANGE RESPONSE ===")
+            print(f"Token type: {token.get('token_type', 'unknown')}")
             print(f"Access token present: {'access_token' in token}")
-            print(f"Token scope: {token.get('scope', 'not provided')}")
+            print(f"ID token present: {'id_token' in token}")
+            print(f"Token scope: {token.get('scope', 'NOT PROVIDED')}")
+            print(f"Expires in: {token.get('expires_in', 'NOT PROVIDED')}")
+            print(f"Token keys: {list(token.keys())}")
+            print(f"Full token response (masked): {json.dumps({k: ('***' if k in ['access_token', 'refresh_token', 'id_token'] else v) for k, v in token.items()}, indent=2)}")
+            print(f"===============================")
 
-            # Get user info from userinfo endpoint using the access token
-            userinfo_url = f'{auth.base_url}/application/o/userinfo/'
-            print(f"Calling userinfo endpoint: {userinfo_url}")
+            # Get user info - try id_token first (OIDC), fallback to userinfo endpoint
+            user_info = None
 
-            userinfo_response = requests.get(
-                userinfo_url,
-                headers={'Authorization': f'Bearer {token["access_token"]}'}
-            )
+            if 'id_token' in token:
+                # Parse id_token to get user info (OIDC standard)
+                # ID tokens are JWT but we can decode without verification since we got it
+                # directly from the token endpoint over HTTPS with client authentication
+                try:
+                    import base64
+                    # JWT format: header.payload.signature
+                    id_token_parts = token['id_token'].split('.')
+                    if len(id_token_parts) >= 2:
+                        # Decode payload (add padding if needed)
+                        payload = id_token_parts[1]
+                        payload += '=' * (4 - len(payload) % 4)  # Add padding
+                        user_info = json.loads(base64.urlsafe_b64decode(payload))
+                        print(f"Successfully decoded id_token, user: {user_info.get('email', 'unknown')}")
+                except Exception as e:
+                    print(f"Warning: Failed to decode id_token: {e}")
+                    user_info = None
 
-            print(f"Userinfo response status: {userinfo_response.status_code}")
-            print(f"Userinfo response headers: {dict(userinfo_response.headers)}")
+            # Fallback to userinfo endpoint if id_token parsing failed
+            if not user_info:
+                userinfo_url = f'{auth.base_url}/application/o/userinfo/'
+                print(f"Calling userinfo endpoint: {userinfo_url}")
 
-            if userinfo_response.status_code != 200:
-                error_details = {
-                    'status_code': userinfo_response.status_code,
-                    'response_text': userinfo_response.text,
-                    'response_headers': dict(userinfo_response.headers),
-                    'endpoint_used': userinfo_url,
-                    'token_type': token.get('token_type', 'unknown'),
-                    'token_scope': token.get('scope', 'not provided')
-                }
+                userinfo_response = requests.get(
+                    userinfo_url,
+                    headers={'Authorization': f'Bearer {token["access_token"]}'}
+                )
 
-                return jsonify({
-                    'error': 'Failed to get user info',
-                    'message': f'Userinfo endpoint returned status {userinfo_response.status_code}',
-                    'details': error_details
-                }), userinfo_response.status_code
+                print(f"Userinfo response status: {userinfo_response.status_code}")
+                print(f"Userinfo response headers: {dict(userinfo_response.headers)}")
 
-            user_info = userinfo_response.json()
+                if userinfo_response.status_code != 200:
+                    error_details = {
+                        'status_code': userinfo_response.status_code,
+                        'response_text': userinfo_response.text,
+                        'response_headers': dict(userinfo_response.headers),
+                        'endpoint_used': userinfo_url,
+                        'token_type': token.get('token_type', 'unknown'),
+                        'token_scope': token.get('scope', 'not provided'),
+                        'note': 'id_token parsing also failed or id_token not present'
+                    }
+
+                    return jsonify({
+                        'error': 'Failed to get user info',
+                        'message': f'Userinfo endpoint returned status {userinfo_response.status_code}',
+                        'details': error_details
+                    }), userinfo_response.status_code
+
+                user_info = userinfo_response.json()
 
             # Check group membership if configured
             if auth.allowed_groups and not auth.check_group_membership(user_info):
