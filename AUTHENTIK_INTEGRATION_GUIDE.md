@@ -158,17 +158,19 @@ class AuthentikAuth:
         self.oauth = OAuth(app)
 
         # Register Authentik as OAuth provider
-        # IMPORTANT: The OIDC discovery URL uses the application slug, not the client_id
+        # IMPORTANT: Use manual endpoint configuration to avoid JWKS validation issues
+        # (Some Authentik configs use HS256 with empty JWKS)
         self.authentik = self.oauth.register(
             name='authentik',
             client_id=self.client_id,
             client_secret=self.client_secret,
-            server_metadata_url=f'{self.base_url}/application/o/{self.slug}/.well-known/openid-configuration',
+            authorize_url=f'{self.base_url}/application/o/authorize/',
+            access_token_url=f'{self.base_url}/application/o/token/',
+            userinfo_endpoint=f'{self.base_url}/application/o/userinfo/',
             client_kwargs={
                 'scope': 'openid email profile',
                 'code_challenge_method': 'S256',  # Enable PKCE for better security
-            },
-            authorize_params={'nonce': None}  # Disable nonce to avoid JWKS parsing issues
+            }
         )
 
         # Session configuration
@@ -810,10 +812,18 @@ ENABLE_AUTH=true
 ```
 
 **Causas comunes**:
-1. Versión antigua de Authlib (< 1.6.0)
-2. Problemas con la configuración del OAuth2 provider en Authentik
-3. JWKS endpoint devuelve formato inesperado
-4. Nonce verification issues
+1. **JWKS vacío con algoritmo HS256** (causa más común)
+2. Versión antigua de Authlib (< 1.6.0)
+3. Problemas con la configuración del OAuth2 provider en Authentik
+4. JWKS endpoint devuelve formato inesperado
+5. Nonce verification issues
+
+**Diagnóstico rápido**:
+```bash
+# Verifica si JWKS está vacío:
+curl https://your-authentik.com/application/o/your-slug/jwks/
+# Si devuelve {} (vacío), tienes el problema #1
+```
 
 **Solución**:
 
@@ -872,6 +882,24 @@ ENABLE_AUTH=true
    - Authentik → Applications → Tu aplicación → Provider
    - Asegúrate que "Signing Key" esté configurada
    - Verifica que "Subject mode" sea `hashed_user_id` o `user_username`
+
+7. **SOLUCIÓN DEFINITIVA para JWKS vacío con HS256**:
+
+   Si tu endpoint JWKS devuelve `{}` (vacío) y usas algoritmo HS256, **no puedes usar `server_metadata_url`**. En su lugar, configura manualmente los endpoints:
+
+   ```python
+   # ❌ NO uses esto si JWKS está vacío:
+   server_metadata_url=f'{base_url}/application/o/{slug}/.well-known/openid-configuration'
+
+   # ✅ USA esto en su lugar:
+   authorize_url=f'{base_url}/application/o/authorize/',
+   access_token_url=f'{base_url}/application/o/token/',
+   userinfo_endpoint=f'{base_url}/application/o/userinfo/',
+   ```
+
+   **Por qué**: Cuando usas `server_metadata_url`, Authlib automáticamente descarga la configuración OIDC e intenta validar el id_token usando el JWKS. Si el JWKS está vacío (porque usas HS256), falla con "Invalid key set format".
+
+   La configuración manual evita el JWKS y solo usa el userinfo endpoint, que es más confiable.
 
 ### Problema: "Invalid client_id or client_secret"
 
@@ -1040,12 +1068,13 @@ authentik = oauth.register(
     name='authentik',
     client_id=os.getenv('AUTHENTIK_CLIENT_ID'),
     client_secret=os.getenv('AUTHENTIK_CLIENT_SECRET'),
-    server_metadata_url=f"{os.getenv('AUTHENTIK_BASE_URL')}/application/o/{os.getenv('AUTHENTIK_SLUG')}/.well-known/openid-configuration",
+    authorize_url=f"{os.getenv('AUTHENTIK_BASE_URL')}/application/o/authorize/",
+    access_token_url=f"{os.getenv('AUTHENTIK_BASE_URL')}/application/o/token/",
+    userinfo_endpoint=f"{os.getenv('AUTHENTIK_BASE_URL')}/application/o/userinfo/",
     client_kwargs={
         'scope': 'openid email profile',
         'code_challenge_method': 'S256'
-    },
-    authorize_params={'nonce': None}
+    }
 )
 
 # Decorator

@@ -42,17 +42,20 @@ class AuthentikAuth:
 
         # Register Authentik provider
         # Note: The OIDC discovery URL uses the application slug, not the client_id
+        # Note: Manual configuration to avoid JWKS validation issues when using HS256
         self.authentik = self.oauth.register(
             name='authentik',
             client_id=self.client_id,
             client_secret=self.client_secret,
-            server_metadata_url=f'{self.base_url}/application/o/{self.slug}/.well-known/openid-configuration',
+            # Use manual endpoint configuration instead of server_metadata_url
+            # to avoid automatic JWKS fetching and validation
+            authorize_url=f'{self.base_url}/application/o/authorize/',
+            access_token_url=f'{self.base_url}/application/o/token/',
+            userinfo_endpoint=f'{self.base_url}/application/o/userinfo/',
             client_kwargs={
                 'scope': 'openid email profile',
                 'code_challenge_method': 'S256',  # Enable PKCE
-            },
-            # Disable nonce verification to avoid JWKS parsing issues
-            authorize_params={'nonce': None}
+            }
         )
 
         print(f"Authentication ENABLED - Authentik URL: {self.base_url}")
