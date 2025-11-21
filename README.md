@@ -77,8 +77,16 @@ Para publicar la aplicación en internet, consulta la **[Guía de Deployment](DE
 
 La aplicación soporta autenticación OAuth2/OIDC con Authentik para controlar el acceso.
 
-**Configurar autenticación:**
-- Ver **[Guía de Authentik](AUTHENTIK_SETUP.md)** para instrucciones detalladas
+**⚡ Auto-Configuración (Recomendado - 3 minutos):**
+```bash
+python authentik_auto_setup.py
+```
+- Ver **[Guía Rápida](QUICK_AUTH_SETUP.md)** para configuración automática
+- Solo necesitas: URL de Authentik + Token de API
+- El script crea todo automáticamente
+
+**📖 Configuración Manual:**
+- Ver **[Guía Detallada de Authentik](AUTHENTIK_SETUP.md)** para configuración paso a paso
 - Configura `ENABLE_AUTH=true` en variables de entorno
 - Funciona con grupos de usuarios
 - Sesiones configurables
