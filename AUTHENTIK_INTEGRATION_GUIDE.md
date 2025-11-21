@@ -604,6 +604,82 @@ heroku config:set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_h
 
 ---
 
+## Configuración del Provider OAuth2 en Authentik
+
+**CRÍTICO**: Después de crear el provider OAuth2 en Authentik (ya sea manualmente o con el wizard), debes configurar correctamente los siguientes parámetros para que la autenticación funcione:
+
+### 1. Habilitar "Include claims in id_token"
+
+Por defecto, Authentik NO incluye los claims del usuario (email, name, preferred_username) en el `id_token`. Debes habilitarlo manualmente.
+
+**Pasos**:
+1. Ve a **Authentik → Applications → Applications**
+2. Busca tu aplicación (ej: "MSG to EML Converter")
+3. Haz clic en el **Provider** asociado
+4. Scroll hasta la sección **"Advanced protocol settings"**
+5. **✅ HABILITA** el checkbox **"Include claims in id_token"**
+6. Haz clic en **"Update"** para guardar
+
+**Sin esto**: Los claims estarán vacíos y tu aplicación mostrará "Usuario" o "None" en lugar del nombre real del usuario.
+
+### 2. Configurar Scope Mappings
+
+Los scope mappings determinan qué información del usuario se incluye en los tokens. Debes asegurarte de tener los mappings estándar de OIDC.
+
+**Pasos**:
+1. En la misma página del Provider, busca la sección **"Scopes"**
+2. Asegúrate de tener seleccionados:
+   - ✅ **authentik default OAuth Mapping: OpenID 'openid'**
+   - ✅ **authentik default OAuth Mapping: OpenID 'email'**
+   - ✅ **authentik default OAuth Mapping: OpenID 'profile'**
+3. Si faltan, agrégalos desde el dropdown **"Add existing scope"**
+4. Haz clic en **"Update"** para guardar
+
+**Qué incluye cada scope**:
+- `openid`: Claims básicos (sub, iss, aud, exp, iat)
+- `email`: Email del usuario y email_verified
+- `profile`: Nombre, username, given_name, family_name, nickname, groups
+
+### 3. Configurar Redirect URIs (Formato 2024.8+)
+
+Authentik 2024.8+ requiere un formato específico para los redirect URIs con modo de matching estricto.
+
+**Pasos**:
+1. En la página del Provider, busca **"Redirect URIs"**
+2. Asegúrate de tener configurado:
+   ```
+   Matching Mode: strict
+   URL: https://tu-app.com/callback
+   ```
+3. **IMPORTANTE**: La URL debe coincidir EXACTAMENTE con `AUTHENTIK_REDIRECT_URI` en tus variables de entorno
+4. Diferencias de mayúsculas/minúsculas, http vs https, o trailing slash causarán errores
+
+### 4. Verificar Configuración del Usuario
+
+Asegúrate de que tu usuario en Authentik tenga la información básica configurada:
+
+**Pasos**:
+1. Ve a **Authentik → Directory → Users**
+2. Busca tu usuario y ábrelo
+3. Verifica que tenga:
+   - **Username**: Configurado (requerido)
+   - **Name**: Nombre completo (opcional, se mostrará en la app si existe)
+   - **Email**: Dirección de email (opcional pero recomendado)
+4. Guarda si hiciste cambios
+
+### 5. Verificar que funciona
+
+Después de configurar todo:
+
+1. **Cierra sesión** de tu aplicación si ya estabas logueado
+2. **Limpia las cookies** del navegador (o usa ventana incógnita)
+3. **Inicia sesión** nuevamente
+4. Deberías ver tu nombre/email correctamente en el header de la aplicación
+
+**Si sigue sin funcionar**, revisa los logs de tu aplicación para ver qué claims están llegando en el `id_token`.
+
+---
+
 ## Troubleshooting
 
 ### Problemas de Configuración
@@ -822,6 +898,94 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 ```
 
 **Cómo funciona**: Los proxies reversos (Nginx, Render, Heroku) agregan headers `X-Forwarded-Proto` y `X-Forwarded-Host`. ProxyFix lee estos headers y los usa para generar URLs correctas con HTTPS.
+
+---
+
+### Problemas de Visualización de Usuario
+
+#### Error: Usuario aparece como "None" o "Usuario" en lugar del nombre real
+
+**Síntoma**: Después de iniciar sesión exitosamente, el header de la aplicación muestra "None" o "Usuario" en lugar del nombre del usuario.
+
+**Causa 1 - Claims no incluidos en id_token** (más común):
+- El provider de Authentik no tiene habilitado "Include claims in id_token"
+- Los scope mappings (email, profile) no están configurados
+- El `id_token` solo contiene claims mínimos (sub, iss, aud, exp, iat)
+
+**Solución**:
+1. Ve a **Authentik → Applications → Tu aplicación → Provider**
+2. En **"Advanced protocol settings"**, habilita ✅ **"Include claims in id_token"**
+3. En **"Scopes"**, asegúrate de tener:
+   - ✅ `authentik default OAuth Mapping: OpenID 'openid'`
+   - ✅ `authentik default OAuth Mapping: OpenID 'email'`
+   - ✅ `authentik default OAuth Mapping: OpenID 'profile'`
+4. Guarda y cierra sesión en tu app
+5. Inicia sesión nuevamente
+
+**Causa 2 - Usuario sin información configurada**:
+- Tu usuario en Authentik no tiene nombre o email configurado
+
+**Solución**:
+1. Ve a **Authentik → Directory → Users**
+2. Abre tu usuario
+3. Asegúrate de tener configurado:
+   - **Username**: (requerido)
+   - **Name**: Tu nombre completo
+   - **Email**: Tu email
+4. Guarda y vuelve a iniciar sesión
+
+**Causa 3 - Fallback en el código**:
+Si no hay name, preferred_username ni email, el código usa "Usuario" como fallback. Esto indica que ningún claim llegó correctamente.
+
+**Verificación con logs**:
+Si tienes acceso a los logs del servidor, busca la sección:
+```
+=== ID_TOKEN CLAIMS ===
+Available claims: [...]
+  - email: NOT PRESENT  ← Problema aquí
+  - name: NOT PRESENT   ← Problema aquí
+  - preferred_username: NOT PRESENT
+```
+
+Si todos muestran "NOT PRESENT", el problema es la configuración del provider en Authentik (solución arriba).
+
+---
+
+### Problemas de Logout
+
+#### Error: 404 en logout - URL usa client_id en lugar de slug
+
+**Síntoma**: Al hacer clic en "Cerrar Sesión", obtienes un error 404:
+```
+https://auth.example.com/application/o/0EQttwGxHfo2S0uSy7IhtV8qYPWKCkLIG56quYxp/end-session/
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                           client_id (incorrecto)
+```
+
+**Causa**: El endpoint de logout usa el client_id en lugar del slug de la aplicación.
+
+**Solución**:
+Corrige la URL de logout para usar el slug:
+
+```python
+# ❌ INCORRECTO:
+logout_url = f"{auth.base_url}/application/o/{auth.client_id}/end-session/"
+
+# ✅ CORRECTO:
+logout_url = f"{auth.base_url}/application/o/{auth.slug}/end-session/"
+```
+
+**URL correcta**: `https://auth.example.com/application/o/msg-converter/end-session/`
+
+**Nota**: Todos los endpoints de aplicación en Authentik usan el slug, no el client_id:
+- ✅ `/application/o/{slug}/.well-known/openid-configuration`
+- ✅ `/application/o/{slug}/jwks/`
+- ✅ `/application/o/{slug}/end-session/`
+
+Solo los endpoints OAuth2 genéricos usan rutas sin slug:
+- `/application/o/authorize/`
+- `/application/o/token/`
+- `/application/o/userinfo/`
 
 ---
 
@@ -1171,6 +1335,32 @@ Esta guía ha sido probada con:
 
 ## Changelog
 
+### Versión 2.1 (2025-11-21)
+
+**Nuevas características**:
+- ✨ Agregada sección completa: "Configuración del Provider OAuth2 en Authentik"
+- ✨ Documentación detallada de configuración de Scope Mappings requeridos
+- ✨ Guía paso a paso para habilitar "Include claims in id_token"
+- ✨ Sección de troubleshooting: "Problemas de Visualización de Usuario"
+- ✨ Sección de troubleshooting: "Problemas de Logout"
+
+**Fixes documentados**:
+- 🐛 Fix: Logout URL usando slug en lugar de client_id
+- 🐛 Fix: Usuario muestra "None" o "Usuario" por claims faltantes
+- 🐛 Fix: Lógica de fallback para display name (name → preferred_username → email)
+- 🐛 Fix: Debug logs detallados de id_token claims
+
+**Configuración crítica de Authentik**:
+- ✅ `authentik default OAuth Mapping: OpenID 'openid'` (requerido)
+- ✅ `authentik default OAuth Mapping: OpenID 'email'` (requerido)
+- ✅ `authentik default OAuth Mapping: OpenID 'profile'` (requerido)
+- ✅ Habilitar "Include claims in id_token" en Advanced protocol settings
+
+**Versiones probadas en producción**:
+- MSG to EML Converter v2.1.20
+- Authentik 2024.8+
+- Desplegado exitosamente en Render.com
+
 ### Versión 2.0 (2025-11-21)
 
 **Cambios mayores**:
@@ -1213,5 +1403,6 @@ Esta guía es de código abierto y puede ser adaptada libremente para tus proyec
 4. Verifica que estés usando las versiones correctas (Authlib >= 1.6.0)
 
 **Última actualización**: 2025-11-21
-**Versión de la guía**: 2.0
+**Versión de la guía**: 2.1
 **Compatible con**: Authentik 2024.8+, Flask 3.0+, Python 3.11+
+**Probado en producción**: MSG to EML Converter v2.1.20 en Render.com
