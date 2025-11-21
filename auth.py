@@ -261,9 +261,12 @@ def init_auth_routes(app, auth):
             expires_at = datetime.now() + timedelta(hours=session_lifetime)
 
             # Store user info in session (minimal data to avoid cookie size limit)
+            # Use name with fallback to preferred_username or email
+            display_name = user_info.get('name') or user_info.get('preferred_username') or user_info.get('email', 'Usuario')
+
             session['user'] = {
                 'email': user_info.get('email'),
-                'name': user_info.get('name'),
+                'name': display_name,
                 'preferred_username': user_info.get('preferred_username'),
                 'groups': user_info.get('groups', [])
             }
