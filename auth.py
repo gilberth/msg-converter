@@ -146,12 +146,14 @@ def init_auth_routes(app, auth):
             # Exchange authorization code for access token using requests directly
             # This avoids Authlib's automatic id_token parsing which fails with empty JWKS (HS256)
             # IMPORTANT: redirect_uri must match exactly what was used in authorize step
+            redirect_uri_used = url_for('callback', _external=True)
+
             token_response = requests.post(
                 auth.authentik.access_token_url,
                 data={
                     'grant_type': 'authorization_code',
                     'code': code,
-                    'redirect_uri': url_for('callback', _external=True),
+                    'redirect_uri': redirect_uri_used,
                     'client_id': auth.client_id,
                     'client_secret': auth.client_secret
                 },
@@ -159,9 +161,23 @@ def init_auth_routes(app, auth):
             )
 
             if token_response.status_code != 200:
+                error_detail = token_response.json() if token_response.text else {}
                 return jsonify({
                     'error': 'Token exchange failed',
-                    'message': f'Failed to exchange authorization code: {token_response.text}'
+                    'message': f'Failed to exchange authorization code: {token_response.text}',
+                    'debug_info': {
+                        'redirect_uri_sent': redirect_uri_used,
+                        'status_code': token_response.status_code,
+                        'authentik_error': error_detail.get('error', 'unknown'),
+                        'authentik_description': error_detail.get('error_description', 'No description'),
+                        'possible_causes': [
+                            'Redirect URI in Authentik does not EXACTLY match: ' + redirect_uri_used,
+                            'Authorization code expired (codes expire after ~60 seconds)',
+                            'Authorization code already used (codes are single-use)',
+                            'Client credentials (client_id/client_secret) incorrect'
+                        ],
+                        'action_required': f'Go to Authentik and verify redirect_uris contains EXACTLY: {redirect_uri_used}'
+                    }
                 }), token_response.status_code
 
             token = token_response.json()
