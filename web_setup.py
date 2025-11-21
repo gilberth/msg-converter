@@ -215,6 +215,7 @@ class WebAuthentikSetup:
         set_key(env_file, 'AUTHENTIK_BASE_URL', self.base_url)
         set_key(env_file, 'AUTHENTIK_CLIENT_ID', provider['client_id'])
         set_key(env_file, 'AUTHENTIK_CLIENT_SECRET', provider['client_secret'])
+        set_key(env_file, 'AUTHENTIK_SLUG', self.app_slug)
         set_key(env_file, 'AUTHENTIK_REDIRECT_URI', f"{self.app_url}/callback")
         set_key(env_file, 'AUTHENTIK_API_TOKEN', self.api_token)
 

@@ -26,24 +26,27 @@ class AuthentikAuth:
         self.client_id = os.environ.get('AUTHENTIK_CLIENT_ID', '')
         self.client_secret = os.environ.get('AUTHENTIK_CLIENT_SECRET', '')
         self.redirect_uri = os.environ.get('AUTHENTIK_REDIRECT_URI', '')
+        self.slug = os.environ.get('AUTHENTIK_SLUG', '')  # Application slug for OIDC endpoint
         self.allowed_groups = os.environ.get('AUTHENTIK_ALLOWED_GROUPS', '').split(',')
         self.allowed_groups = [g.strip() for g in self.allowed_groups if g.strip()]
 
-        if not all([self.base_url, self.client_id, self.client_secret, self.redirect_uri]):
+        if not all([self.base_url, self.client_id, self.client_secret, self.redirect_uri, self.slug]):
             raise ValueError(
                 "Missing Authentik configuration. Please set: "
-                "AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, AUTHENTIK_CLIENT_SECRET, AUTHENTIK_REDIRECT_URI"
+                "AUTHENTIK_BASE_URL, AUTHENTIK_CLIENT_ID, AUTHENTIK_CLIENT_SECRET, "
+                "AUTHENTIK_REDIRECT_URI, AUTHENTIK_SLUG"
             )
 
         # Initialize OAuth
         self.oauth = OAuth(app)
 
         # Register Authentik provider
+        # Note: The OIDC discovery URL uses the application slug, not the client_id
         self.authentik = self.oauth.register(
             name='authentik',
             client_id=self.client_id,
             client_secret=self.client_secret,
-            server_metadata_url=f'{self.base_url}/application/o/{self.client_id}/.well-known/openid-configuration',
+            server_metadata_url=f'{self.base_url}/application/o/{self.slug}/.well-known/openid-configuration',
             client_kwargs={
                 'scope': 'openid email profile'
             }
