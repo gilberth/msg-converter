@@ -44,7 +44,25 @@ class WebAuthentikSetup:
             if hasattr(e, 'response') and e.response is not None:
                 try:
                     error_detail = e.response.json()
-                    error_msg = error_detail.get('detail', error_msg)
+                    # Try to get detailed error message
+                    if isinstance(error_detail, dict):
+                        # Look for common error fields
+                        if 'detail' in error_detail:
+                            error_msg = error_detail['detail']
+                        elif 'error' in error_detail:
+                            error_msg = error_detail['error']
+                        else:
+                            # Show all field errors
+                            error_parts = []
+                            for field, errors in error_detail.items():
+                                if isinstance(errors, list):
+                                    error_parts.append(f"{field}: {', '.join(str(e) for e in errors)}")
+                                else:
+                                    error_parts.append(f"{field}: {errors}")
+                            if error_parts:
+                                error_msg = '; '.join(error_parts)
+                    else:
+                        error_msg = str(error_detail)
                 except:
                     error_msg = e.response.text if e.response.text else error_msg
             return {'error': error_msg}
@@ -90,7 +108,7 @@ class WebAuthentikSetup:
             'name': self.app_name,
             'authorization_flow': flow,
             'client_type': 'confidential',
-            'redirect_uris': f"{self.app_url}/callback",
+            'redirect_uris': [f"{self.app_url}/callback"],  # Must be a list!
             'sub_mode': 'hashed_user_id',
             'include_claims_in_id_token': True,
         }
