@@ -183,16 +183,37 @@ def init_auth_routes(app, auth):
 
             token = token_response.json()
 
+            # Debug: Log token info (without exposing the actual token)
+            print(f"Token exchange successful. Token type: {token.get('token_type', 'unknown')}")
+            print(f"Access token present: {'access_token' in token}")
+            print(f"Token scope: {token.get('scope', 'not provided')}")
+
             # Get user info from userinfo endpoint using the access token
+            userinfo_url = f'{auth.base_url}/application/o/userinfo/'
+            print(f"Calling userinfo endpoint: {userinfo_url}")
+
             userinfo_response = requests.get(
-                f'{auth.base_url}/application/o/userinfo/',
+                userinfo_url,
                 headers={'Authorization': f'Bearer {token["access_token"]}'}
             )
 
+            print(f"Userinfo response status: {userinfo_response.status_code}")
+            print(f"Userinfo response headers: {dict(userinfo_response.headers)}")
+
             if userinfo_response.status_code != 200:
+                error_details = {
+                    'status_code': userinfo_response.status_code,
+                    'response_text': userinfo_response.text,
+                    'response_headers': dict(userinfo_response.headers),
+                    'endpoint_used': userinfo_url,
+                    'token_type': token.get('token_type', 'unknown'),
+                    'token_scope': token.get('scope', 'not provided')
+                }
+
                 return jsonify({
                     'error': 'Failed to get user info',
-                    'message': f'Userinfo endpoint returned: {userinfo_response.text}'
+                    'message': f'Userinfo endpoint returned status {userinfo_response.status_code}',
+                    'details': error_details
                 }), userinfo_response.status_code
 
             user_info = userinfo_response.json()
