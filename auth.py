@@ -156,7 +156,8 @@ def init_auth_routes(app, auth):
                     'code': code,
                     'redirect_uri': redirect_uri_used,
                     'client_id': auth.client_id,
-                    'client_secret': auth.client_secret
+                    'client_secret': auth.client_secret,
+                    'scope': 'openid email profile'
                 },
                 headers={'Content-Type': 'application/x-www-form-urlencoded'}
             )
