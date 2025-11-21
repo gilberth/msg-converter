@@ -212,7 +212,18 @@ def init_auth_routes(app, auth):
                         payload = id_token_parts[1]
                         payload += '=' * (4 - len(payload) % 4)  # Add padding
                         user_info = json.loads(base64.urlsafe_b64decode(payload))
-                        print(f"Successfully decoded id_token, user: {user_info.get('email', 'unknown')}")
+
+                        # Debug: Log what claims are in the id_token
+                        print(f"=== ID_TOKEN CLAIMS ===")
+                        print(f"Available claims: {list(user_info.keys())}")
+                        print(f"  - sub: {user_info.get('sub', 'NOT PRESENT')}")
+                        print(f"  - email: {user_info.get('email', 'NOT PRESENT')}")
+                        print(f"  - name: {user_info.get('name', 'NOT PRESENT')}")
+                        print(f"  - preferred_username: {user_info.get('preferred_username', 'NOT PRESENT')}")
+                        print(f"  - given_name: {user_info.get('given_name', 'NOT PRESENT')}")
+                        print(f"  - family_name: {user_info.get('family_name', 'NOT PRESENT')}")
+                        print(f"=======================")
+                        print(f"✅ Successfully decoded id_token")
                 except Exception as e:
                     print(f"Warning: Failed to decode id_token: {e}")
                     user_info = None
