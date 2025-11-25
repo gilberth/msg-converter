@@ -1,153 +1,654 @@
-/* Custom Styles for MSG to EML Converter */
+/* ========================================
+   MSG to EML Converter - Modern Design 2025
+   Email Transformation Hub Theme
+   ======================================== */
 
+/* ========================================
+   1. CSS Variables - Email Blue Palette
+   ======================================== */
 :root {
-    --primary-color: #0d6efd;
-    --success-color: #198754;
-    --danger-color: #dc3545;
-    --warning-color: #ffc107;
-    --border-radius: 12px;
+    /* Primary Colors - Email Professional Theme */
+    --primary: #0078D4;        /* Corporate blue (Outlook-inspired) */
+    --primary-dark: #106EBE;
+    --primary-light: #50A8FF;
+    --secondary: #50E3C2;      /* Aqua green (success/conversion) */
+    --accent: #FF6B35;         /* Orange (action/urgency) */
+
+    /* Neutrals - Modern Palette */
+    --surface: #F5F7FA;        /* Soft background */
+    --surface-elevated: #FFFFFF;
+    --surface-glass: rgba(255, 255, 255, 0.75);
+    --text-primary: #1A1A1A;
+    --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
+
+    /* Glassmorphism Effects */
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.3);
+    --glass-shadow: 0 8px 32px rgba(0, 120, 212, 0.12);
+    --glass-backdrop: blur(10px);
+
+    /* Semantic Colors */
+    --success: #10B981;
+    --success-light: #D1FAE5;
+    --danger: #EF4444;
+    --danger-light: #FEE2E2;
+    --warning: #F59E0B;
+    --info: var(--primary);
+
+    /* Spacing & Sizing */
+    --border-radius: 16px;
+    --border-radius-lg: 24px;
+    --border-radius-sm: 8px;
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 3rem;
+
+    /* Typography - Modern Font Stack */
+    --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+    /* Fluid Typography */
+    --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+    --text-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+    --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --text-lg: clamp(1.125rem, 1rem + 0.625vw, 1.5rem);
+    --text-xl: clamp(1.5rem, 1.25rem + 1.25vw, 2.25rem);
+    --text-2xl: clamp(2rem, 1.5rem + 2.5vw, 3.5rem);
+
+    /* Transitions */
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-base: 0 4px 6px rgba(0, 0, 0, 0.07);
+    --shadow-md: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 20px 25px rgba(0, 0, 0, 0.15);
+    --shadow-xl: 0 25px 50px rgba(0, 0, 0, 0.25);
+}
+
+/* ========================================
+   2. Base Styles
+   ======================================== */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: var(--font-body);
+    background: var(--surface);
+    color: var(--text-primary);
     min-height: 100vh;
     padding: 20px 0;
+    margin: 0;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .container {
     max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
 }
 
-/* User Info Bar */
+/* ========================================
+   3. Glassmorphic Header Bar (Fixed)
+   ======================================== */
 .user-info-bar {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    -webkit-backdrop-filter: var(--glass-backdrop);
+    border: 1px solid var(--glass-border);
     border-radius: var(--border-radius);
-    padding: 12px 20px;
-    margin-bottom: 20px;
-    color: white;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+    box-shadow: var(--glass-shadow);
+    transition: all var(--transition-base);
+}
+
+.user-info-bar:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
 }
 
 .user-details {
     display: flex;
     align-items: center;
     font-weight: 500;
+    color: var(--text-primary);
 }
 
 .user-name {
-    font-size: 1rem;
+    font-size: var(--text-base);
+    color: var(--text-primary);
 }
 
 .user-info-bar .btn-outline-light {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: var(--primary);
+    color: var(--primary);
+    background: transparent;
+    transition: all var(--transition-base);
 }
 
 .user-info-bar .btn-outline-light:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-color: white;
-}
-
-header {
+    background-color: var(--primary);
+    border-color: var(--primary);
     color: white;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-base);
 }
 
+/* ========================================
+   4. Hero Header Section
+   ======================================== */
+header {
+    text-align: center;
+    padding: var(--spacing-xl) 0;
+    color: var(--text-primary);
+}
+
+header .mb-4 {
+    margin-bottom: var(--spacing-md);
+}
+
+header .display-4 {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: var(--spacing-md);
+    letter-spacing: -0.02em;
+}
+
+header .lead {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    font-weight: 400;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+header small {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+header a {
+    color: var(--primary);
+    text-decoration: underline;
+    transition: color var(--transition-fast);
+}
+
+header a:hover {
+    color: var(--primary-dark);
+}
+
+/* Email Conversion Icon Animation */
+.conversion-icon {
+    display: inline-block;
+    animation: float 3s ease-in-out infinite;
+    font-size: 4rem;
+    color: var(--primary);
+}
+
+/* ========================================
+   5. Main Card Container
+   ======================================== */
 .card {
-    border-radius: var(--border-radius);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: var(--surface-elevated);
+    border: none;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-base);
+    overflow: hidden;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+    box-shadow: var(--shadow-xl);
 }
 
+.card-body {
+    padding: var(--spacing-xl);
+}
+
+/* ========================================
+   6. Upload Zone - Glassmorphic Design
+   ======================================== */
 .upload-zone {
-    border: 3px dashed #cbd5e0;
-    border-radius: var(--border-radius);
-    background-color: #f8f9fa;
+    background: linear-gradient(135deg,
+        rgba(0, 120, 212, 0.05) 0%,
+        rgba(80, 227, 194, 0.05) 100%);
+    backdrop-filter: var(--glass-backdrop);
+    -webkit-backdrop-filter: var(--glass-backdrop);
+    border: 2px dashed rgba(0, 120, 212, 0.3);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.upload-zone::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg,
+        rgba(0, 120, 212, 0.02) 0%,
+        rgba(80, 227, 194, 0.02) 100%);
+    opacity: 0;
+    transition: opacity var(--transition-base);
 }
 
 .upload-zone:hover {
-    border-color: var(--primary-color);
-    background-color: #e7f1ff;
-    transform: scale(1.02);
+    border-color: var(--primary);
+    background: linear-gradient(135deg,
+        rgba(0, 120, 212, 0.1) 0%,
+        rgba(80, 227, 194, 0.1) 100%);
+    transform: translateY(-4px);
+    box-shadow: var(--glass-shadow);
 }
 
+.upload-zone:hover::before {
+    opacity: 1;
+}
+
+/* Dragover State */
 .upload-zone.dragover {
-    border-color: var(--success-color);
-    background-color: #d1f2eb;
-    transform: scale(1.05);
+    border-color: var(--secondary);
+    border-width: 3px;
+    border-style: solid;
+    background: linear-gradient(135deg,
+        rgba(80, 227, 194, 0.15) 0%,
+        rgba(0, 120, 212, 0.15) 100%);
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(80, 227, 194, 0.3);
+}
+
+/* Upload Zone Icon */
+.upload-zone .bi-cloud-upload {
+    font-size: 3.5rem;
+    color: var(--primary);
+    animation: float 2s ease-in-out infinite;
+}
+
+.upload-zone h5 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.upload-zone p {
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+}
+
+.upload-zone small {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+/* ========================================
+   7. File List - Modern Cards
+   ======================================== */
+#file-list h6 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
 }
 
 .file-item {
-    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md);
+    background: var(--surface);
+    border: 1px solid #E5E7EB;
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-sm);
+    transition: all var(--transition-base);
 }
 
 .file-item:hover {
-    background-color: #f8f9fa;
-    transform: translateX(5px);
+    background: var(--surface-elevated);
+    border-color: var(--primary-light);
+    transform: translateX(8px);
+    box-shadow: var(--shadow-base);
 }
 
+.file-item .file-icon-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex: 1;
+}
+
+.file-item .bi-file-earmark-text {
+    font-size: 1.5rem;
+    color: var(--primary);
+}
+
+.file-item strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: var(--text-base);
+}
+
+.file-size {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.file-metadata {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Conversion Arrow Icon */
+.conversion-arrow {
+    display: inline-block;
+    font-size: 1.2rem;
+    color: var(--secondary);
+    margin: 0 0.5rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* ========================================
+   8. Buttons - Modern Design
+   ======================================== */
 .btn {
-    border-radius: 8px;
-    font-weight: 500;
+    border-radius: var(--border-radius-sm);
+    font-weight: 600;
     padding: 12px 24px;
-    transition: all 0.3s ease;
+    font-size: var(--text-base);
+    transition: all var(--transition-base);
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width var(--transition-base), height var(--transition-base);
+}
+
+.btn:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-md);
 }
 
-.btn-lg {
-    padding: 15px 30px;
-    font-size: 1.1rem;
+.btn:active {
+    transform: translateY(0);
 }
 
-.feature-box {
-    background-color: white;
-    border-radius: var(--border-radius);
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.feature-box:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-}
-
-.list-group-item {
-    border-radius: 8px !important;
-    margin-bottom: 8px;
-    border: 1px solid #e9ecef;
-}
-
-.progress {
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.progress-bar {
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.alert {
-    border-radius: var(--border-radius);
-    border: none;
-}
-
-footer {
+.btn-primary {
+    background: var(--primary);
     color: white;
 }
 
-/* Animations */
+.btn-primary:hover {
+    background: var(--primary-dark);
+    color: white;
+}
+
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+    color: white;
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-outline-danger {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+}
+
+.btn-outline-danger:hover {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-outline-primary {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+}
+
+.btn-outline-primary:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-lg {
+    padding: 15px 32px;
+    font-size: var(--text-lg);
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: var(--text-sm);
+}
+
+.btn-remove {
+    opacity: 0.6;
+    transition: all var(--transition-fast);
+}
+
+.btn-remove:hover {
+    opacity: 1;
+    transform: scale(1.1) rotate(5deg);
+}
+
+.btn-download {
+    background: linear-gradient(135deg, var(--success) 0%, #20c997 100%);
+    border: none;
+    color: white;
+}
+
+.btn-download:hover {
+    background: linear-gradient(135deg, #20c997 0%, var(--success) 100%);
+    color: white;
+}
+
+/* ========================================
+   9. Progress Indicator - Modern Circular
+   ======================================== */
+.progress {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    height: 40px;
+    background-color: #E5E7EB;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+    font-size: var(--text-base);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+    transition: width var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+#progress-text {
+    position: relative;
+    z-index: 1;
+    color: white;
+    font-weight: 700;
+}
+
+/* ========================================
+   10. Results & Alerts
+   ======================================== */
+.alert {
+    border-radius: var(--border-radius);
+    border: none;
+    padding: var(--spacing-md);
+    box-shadow: var(--shadow-base);
+}
+
+.alert-success {
+    background: var(--success-light);
+    color: #065F46;
+}
+
+.alert-success .alert-heading {
+    color: #065F46;
+    font-weight: 700;
+    font-size: var(--text-lg);
+}
+
+.alert-danger {
+    background: var(--danger-light);
+    color: #991B1B;
+}
+
+.alert-danger .alert-heading {
+    color: #991B1B;
+    font-weight: 700;
+    font-size: var(--text-lg);
+}
+
+.alert hr {
+    border-color: rgba(0, 0, 0, 0.1);
+    margin: var(--spacing-md) 0;
+}
+
+/* ========================================
+   11. Feature Cards Grid
+   ======================================== */
+.feature-box {
+    background: var(--surface-elevated);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    text-align: center;
+    transition: all var(--transition-base);
+    box-shadow: var(--shadow-base);
+    border: 1px solid #E5E7EB;
+    height: 100%;
+}
+
+.feature-box:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-light);
+}
+
+.feature-box i {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-md);
+    display: block;
+}
+
+.feature-box h5 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: var(--spacing-md) 0 var(--spacing-sm) 0;
+}
+
+.feature-box p {
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ========================================
+   12. Footer
+   ======================================== */
+footer {
+    text-align: center;
+    padding: var(--spacing-xl) 0;
+    color: var(--text-secondary);
+    margin-top: var(--spacing-xl);
+}
+
+footer p {
+    margin: 0.5rem 0;
+}
+
+footer small {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.footer-content {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    display: inline-block;
+    box-shadow: var(--shadow-sm);
+}
+
+/* ========================================
+   13. Animations
+   ======================================== */
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -159,72 +660,238 @@ footer {
     }
 }
 
-.fade-in {
-    animation: fadeIn 0.5s ease-out;
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
 }
 
 @keyframes pulse {
     0%, 100% {
         transform: scale(1);
+        opacity: 1;
     }
     50% {
         transform: scale(1.05);
+        opacity: 0.8;
     }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes rotateIcon {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn var(--transition-slow) ease-out;
+}
+
+.slide-in-up {
+    animation: slideInUp var(--transition-slow) ease-out;
+}
+
+.shake {
+    animation: shake 0.5s ease-in-out;
 }
 
 .pulse {
     animation: pulse 2s infinite;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-
-    header h1 {
-        font-size: 2rem;
-    }
-
-    .card-body {
-        padding: 2rem !important;
-    }
-
-    .upload-zone {
-        padding: 2rem !important;
-    }
-}
-
-/* Loading Spinner */
+/* ========================================
+   14. Loading States
+   ======================================== */
 .spinner-border-sm {
     width: 1rem;
     height: 1rem;
+    border-width: 0.15em;
 }
 
-/* File size badge */
-.file-size {
-    font-size: 0.85rem;
-    color: #6c757d;
+.loading-skeleton {
+    background: linear-gradient(
+        90deg,
+        #f0f0f0 25%,
+        #e0e0e0 50%,
+        #f0f0f0 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+    border-radius: var(--border-radius-sm);
 }
 
-/* Download button */
-.btn-download {
-    background: linear-gradient(135deg, var(--success-color) 0%, #20c997 100%);
-    border: none;
-    color: white;
+/* ========================================
+   15. Accessibility
+   ======================================== */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
-.btn-download:hover {
-    background: linear-gradient(135deg, #20c997 0%, var(--success-color) 100%);
-    color: white;
+/* Focus Visible for Keyboard Navigation */
+*:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
 }
 
-/* Remove file button */
-.btn-remove {
-    opacity: 0.6;
-    transition: opacity 0.3s ease;
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
-.btn-remove:hover {
-    opacity: 1;
+/* ========================================
+   16. Responsive Design - Mobile First
+   ======================================== */
+@media (max-width: 768px) {
+    :root {
+        --spacing-xl: 2rem;
+        --spacing-lg: 1.5rem;
+    }
+
+    .container {
+        padding: 0 var(--spacing-sm);
+    }
+
+    header {
+        padding: var(--spacing-lg) 0;
+    }
+
+    header .display-4 {
+        font-size: var(--text-xl);
+    }
+
+    .card-body {
+        padding: var(--spacing-lg);
+    }
+
+    .upload-zone {
+        padding: var(--spacing-lg);
+        border-radius: var(--border-radius);
+    }
+
+    .upload-zone .bi-cloud-upload {
+        font-size: 2.5rem;
+    }
+
+    .file-item {
+        padding: var(--spacing-sm);
+        font-size: var(--text-sm);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+
+    .file-item:hover {
+        transform: translateY(-4px);
+    }
+
+    /* Touch-friendly buttons */
+    .btn {
+        min-height: 48px;
+        min-width: 48px;
+        padding: 14px 20px;
+    }
+
+    .btn-lg {
+        min-height: 56px;
+        padding: 16px 24px;
+    }
+
+    /* Stack features vertically */
+    .feature-box {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .user-info-bar {
+        padding: var(--spacing-sm);
+    }
+
+    .user-info-bar .d-flex {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        align-items: flex-start !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .upload-zone h5 {
+        font-size: var(--text-base);
+    }
+
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ========================================
+   17. Print Styles
+   ======================================== */
+@media print {
+    body {
+        background: white;
+    }
+
+    .user-info-bar,
+    .upload-zone,
+    .btn,
+    footer {
+        display: none;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+}
+
+/* ========================================
+   18. Dark Mode Support (Future Enhancement)
+   ======================================== */
+@media (prefers-color-scheme: dark) {
+    /* Dark mode variables can be added here in future */
 }
