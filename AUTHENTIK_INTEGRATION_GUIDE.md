@@ -443,7 +443,867 @@ def dashboard():
 
 ### 2. Configuración Web Automática
 
-(El contenido de esta sección permanece igual que en el documento original, ya que funciona correctamente)
+Esta sección explica cómo programar una aplicación para que con un botón se autoconfigure toda la configuración de Authentik usando su API REST.
+
+#### ¿Cómo funciona la autoconfiguración?
+
+La autoconfiguración automatiza todos los pasos manuales de configurar Authentik:
+
+1. **Conexión a la API** de Authentik usando un token de administrador
+2. **Creación del Provider OAuth2** con todos los parámetros necesarios
+3. **Creación de la Application** vinculada al provider
+4. **Guardado automático** de credenciales (client_id, client_secret) en el archivo `.env`
+
+**Ventajas**:
+- ✅ Sin configuración manual en Authentik
+- ✅ Sin copiar/pegar client_id y client_secret
+- ✅ Configuración en 1 clic
+- ✅ Menos errores de configuración
+- ✅ Ideal para despliegues rápidos
+
+#### Requisitos previos
+
+1. **Token de API de Authentik** con permisos:
+   - `authentik Core: Providers` (view, write)
+   - `authentik Core: Applications` (view, write)
+   - `authentik Flows: Flows` (view)
+
+2. **Cómo crear el token**:
+   - Inicia sesión en Authentik como administrador
+   - Ve a **Directory → Tokens**
+   - Clic en **Create**
+   - Configura:
+     - **Identifier**: `msg-converter-setup`
+     - **User**: Tu usuario administrador
+     - **Scopes**: Selecciona todos los permisos mencionados arriba
+   - Guarda y **copia el token** (solo se muestra una vez)
+
+#### Arquitectura de la autoconfiguración
+
+```
+┌──────────────┐         ┌──────────────┐         ┌─────────────┐
+│   Usuario    │────────▶│  Setup Web   │────────▶│  Authentik  │
+│  (Browser)   │         │  (Flask)     │         │   API       │
+└──────────────┘         └──────────────┘         └─────────────┘
+       │                        │                        │
+       │  1. Accede /setup      │                        │
+       │───────────────────────▶│                        │
+       │                        │                        │
+       │  2. Formulario         │                        │
+       │◀───────────────────────│                        │
+       │                        │                        │
+       │  3. Submit config      │                        │
+       │───────────────────────▶│                        │
+       │                        │                        │
+       │                        │  4. POST /api/v3/      │
+       │                        │    providers/oauth2/   │
+       │                        │───────────────────────▶│
+       │                        │◀───────────────────────│
+       │                        │  (client_id, secret)   │
+       │                        │                        │
+       │                        │  5. POST /api/v3/      │
+       │                        │    core/applications/  │
+       │                        │───────────────────────▶│
+       │                        │◀───────────────────────│
+       │                        │                        │
+       │                        │  6. Save to .env       │
+       │                        │  (AUTHENTIK_CLIENT_ID, │
+       │                        │   AUTHENTIK_CLIENT_    │
+       │                        │   SECRET)              │
+       │                        │                        │
+       │  7. Success + Restart  │                        │
+       │◀───────────────────────│                        │
+       └────────────────────────┘                        │
+```
+
+#### Implementación: Módulo de autoconfiguración
+
+Crea un archivo `web_setup.py`:
+
+```python
+#!/usr/bin/env python3
+"""
+Web-based setup wizard for Authentik configuration
+Automates OAuth2 provider and application creation via API
+"""
+
+import os
+import requests
+from dotenv import set_key
+
+
+class WebAuthentikSetup:
+    """Web-based Authentik setup handler"""
+
+    def __init__(self, base_url, api_token, app_url):
+        """
+        Initialize setup handler
+
+        Args:
+            base_url: Authentik server URL (eg: https://auth.example.com)
+            api_token: API token with provider/app creation permissions
+            app_url: Your application URL (eg: https://msg-converter.com)
+        """
+        self.base_url = base_url.rstrip('/')
+        self.api_token = api_token
+        self.app_url = app_url.rstrip('/')
+        self.app_name = "MSG to EML Converter"
+        self.app_slug = "msg-eml-converter"
+
+    def api_request(self, method, endpoint, data=None):
+        """
+        Make API request to Authentik
+
+        Args:
+            method: HTTP method (GET, POST)
+            endpoint: API endpoint (eg: 'core/applications/')
+            data: Request body for POST requests
+
+        Returns:
+            dict: Response JSON or error dict with 'error' key
+        """
+        url = f"{self.base_url}/api/v3/{endpoint}"
+        headers = {
+            'Authorization': f'Bearer {self.api_token}',
+            'Content-Type': 'application/json'
+        }
+
+        try:
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=10)
+            elif method == 'POST':
+                response = requests.post(url, headers=headers, json=data, timeout=10)
+            else:
+                return {'error': f'Unsupported method: {method}'}
+
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.Timeout:
+            return {'error': 'Request timeout. Check Authentik URL and network.'}
+        except requests.exceptions.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                    # Extract detailed error messages
+                    if isinstance(error_detail, dict):
+                        if 'detail' in error_detail:
+                            error_msg = error_detail['detail']
+                        elif 'error' in error_detail:
+                            error_msg = error_detail['error']
+                        else:
+                            # Collect all field errors
+                            error_parts = []
+                            for field, errors in error_detail.items():
+                                if isinstance(errors, list):
+                                    error_parts.append(f"{field}: {', '.join(str(e) for e in errors)}")
+                                else:
+                                    error_parts.append(f"{field}: {errors}")
+                            if error_parts:
+                                error_msg = '; '.join(error_parts)
+                except:
+                    error_msg = e.response.text if e.response.text else error_msg
+            return {'error': error_msg}
+
+    def validate_connection(self):
+        """
+        Validate connection to Authentik API
+
+        Returns:
+            dict: {'success': True} or {'error': 'message'}
+        """
+        result = self.api_request('GET', 'core/applications/')
+        if result and 'error' not in result:
+            return {'success': True}
+        return result
+
+    def get_default_flow(self, flow_type='authentication'):
+        """
+        Get default flow by type
+
+        Args:
+            flow_type: Flow type (authentication, invalidation, etc.)
+
+        Returns:
+            str: Flow PK (UUID) or None
+        """
+        flows = self.api_request('GET', 'flows/instances/')
+        if flows and 'error' not in flows:
+            # Find flow by type in slug or designation
+            for flow in flows.get('results', []):
+                slug = flow.get('slug', '').lower()
+                designation = flow.get('designation', '').lower()
+                if flow_type in slug or flow_type in designation:
+                    return flow['pk']
+            # Fallback to first available flow
+            if flows.get('results'):
+                return flows['results'][0]['pk']
+        return None
+
+    def create_oauth_provider(self):
+        """
+        Create OAuth2 provider in Authentik
+
+        API Endpoint: POST /api/v3/providers/oauth2/
+
+        Returns:
+            dict: {'success': True, 'provider': {...}} or {'error': 'message'}
+        """
+        # Check if provider already exists
+        providers = self.api_request('GET', 'providers/oauth2/')
+        if providers and 'error' not in providers:
+            for provider in providers.get('results', []):
+                if provider.get('name') == self.app_name:
+                    return {
+                        'success': True,
+                        'provider': provider,
+                        'message': 'Using existing provider'
+                    }
+
+        # Get required flows
+        auth_flow = self.get_default_flow('authentication')
+        if not auth_flow:
+            return {'error': 'Could not find authentication flow'}
+
+        invalidation_flow = self.get_default_flow('invalidation')
+        if not invalidation_flow:
+            invalidation_flow = auth_flow  # Fallback
+
+        # Create provider
+        # IMPORTANT: redirect_uris format changed in Authentik 2024.8+
+        provider_data = {
+            'name': self.app_name,
+            'authorization_flow': auth_flow,
+            'invalidation_flow': invalidation_flow,
+            'client_type': 'confidential',  # Confidential = server-side app with secret
+            'redirect_uris': [
+                {
+                    'matching_mode': 'strict',  # Exact match required
+                    'url': f"{self.app_url}/callback"
+                }
+            ],
+            'sub_mode': 'hashed_user_id',  # Privacy: hash user IDs
+            'include_claims_in_id_token': True,  # CRITICAL: Include user info in token
+        }
+
+        provider = self.api_request('POST', 'providers/oauth2/', provider_data)
+        if provider and 'error' not in provider:
+            return {
+                'success': True,
+                'provider': provider,
+                'message': 'Provider created successfully'
+            }
+        return provider
+
+    def create_application(self, provider_pk):
+        """
+        Create application in Authentik
+
+        API Endpoint: POST /api/v3/core/applications/
+
+        Args:
+            provider_pk: Provider UUID (from create_oauth_provider)
+
+        Returns:
+            dict: {'success': True, 'application': {...}} or {'error': 'message'}
+        """
+        # Check if application already exists
+        apps = self.api_request('GET', 'core/applications/')
+        if apps and 'error' not in apps:
+            for app in apps.get('results', []):
+                if app.get('slug') == self.app_slug:
+                    return {
+                        'success': True,
+                        'application': app,
+                        'message': 'Using existing application'
+                    }
+
+        # Create application
+        app_data = {
+            'name': self.app_name,
+            'slug': self.app_slug,
+            'provider': provider_pk,  # Link to provider
+            'meta_launch_url': self.app_url,  # URL to launch app
+        }
+
+        application = self.api_request('POST', 'core/applications/', app_data)
+        if application and 'error' not in application:
+            return {
+                'success': True,
+                'application': application,
+                'message': 'Application created successfully'
+            }
+        return application
+
+    def setup(self):
+        """
+        Execute full setup: validate → create provider → create app → save to .env
+
+        Returns:
+            dict: Setup result with credentials or error
+        """
+        # Step 1: Validate connection
+        validation = self.validate_connection()
+        if 'error' in validation:
+            return {
+                'success': False,
+                'step': 'validation',
+                'error': f"Connection failed: {validation['error']}"
+            }
+
+        # Step 2: Create OAuth2 provider
+        provider_result = self.create_oauth_provider()
+        if 'error' in provider_result:
+            return {
+                'success': False,
+                'step': 'provider',
+                'error': f"Provider creation failed: {provider_result['error']}"
+            }
+
+        provider = provider_result['provider']
+
+        # Step 3: Create application
+        app_result = self.create_application(provider['pk'])
+        if 'error' in app_result:
+            return {
+                'success': False,
+                'step': 'application',
+                'error': f"Application creation failed: {app_result['error']}"
+            }
+
+        # Step 4: Save credentials to .env file
+        env_file = '.env'
+        if not os.path.exists(env_file):
+            # Create from example if exists
+            if os.path.exists('.env.example'):
+                import shutil
+                shutil.copy('.env.example', env_file)
+            else:
+                # Create minimal .env
+                with open(env_file, 'w') as f:
+                    f.write('')
+
+        # Update environment variables
+        set_key(env_file, 'ENABLE_AUTH', 'true')
+        set_key(env_file, 'AUTHENTIK_BASE_URL', self.base_url)
+        set_key(env_file, 'AUTHENTIK_CLIENT_ID', provider['client_id'])
+        set_key(env_file, 'AUTHENTIK_CLIENT_SECRET', provider['client_secret'])
+        set_key(env_file, 'AUTHENTIK_SLUG', self.app_slug)
+        set_key(env_file, 'AUTHENTIK_REDIRECT_URI', f"{self.app_url}/callback")
+        set_key(env_file, 'AUTHENTIK_API_TOKEN', self.api_token)
+
+        return {
+            'success': True,
+            'client_id': provider['client_id'],
+            'client_secret': provider['client_secret'][:10] + '...',  # Truncate for security
+            'redirect_uri': f"{self.app_url}/callback",
+            'provider_message': provider_result['message'],
+            'app_message': app_result['message']
+        }
+```
+
+#### Implementación: Rutas web del wizard
+
+Agrega estas rutas a tu aplicación Flask:
+
+```python
+from flask import Flask, render_template, request, jsonify, redirect, url_for
+from web_setup import WebAuthentikSetup
+import os
+
+app = Flask(__name__)
+
+@app.route('/setup')
+def setup_page():
+    """Setup wizard page - shows form"""
+    return render_template('setup.html')
+
+@app.route('/api/setup', methods=['POST'])
+def setup_api():
+    """Setup API endpoint - processes form and configures Authentik"""
+    try:
+        # Get form data
+        data = request.get_json()
+
+        authentik_url = data.get('authentik_url', '').strip()
+        api_token = data.get('api_token', '').strip()
+        app_url = data.get('app_url', '').strip()
+
+        # Validate required fields
+        if not all([authentik_url, api_token, app_url]):
+            return jsonify({
+                'success': False,
+                'error': 'All fields are required'
+            }), 400
+
+        # Execute setup
+        setup = WebAuthentikSetup(
+            base_url=authentik_url,
+            api_token=api_token,
+            app_url=app_url
+        )
+
+        result = setup.setup()
+
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Configuration completed successfully!',
+                'client_id': result['client_id'],
+                'redirect_uri': result['redirect_uri'],
+                'next_step': 'Restart the application to apply changes'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown error'),
+                'step': result.get('step', 'unknown')
+            }), 400
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Setup failed: {str(e)}'
+        }), 500
+```
+
+#### Implementación: Interfaz HTML del wizard
+
+Crea `templates/setup.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentik Setup Wizard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .wizard {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .wizard h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .wizard p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            color: #999;
+            margin-top: 6px;
+            font-size: 12px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 16px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .info-box ol {
+            margin-left: 20px;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard">
+        <h1>🔧 Authentik Setup Wizard</h1>
+        <p>Configura automáticamente la autenticación OAuth2 con Authentik en 1 clic.</p>
+
+        <div class="info-box">
+            <h3>📋 Antes de comenzar, necesitas:</h3>
+            <ol>
+                <li>URL de tu instancia Authentik (ej: https://auth.example.com)</li>
+                <li>Token de API con permisos de Provider y Application</li>
+                <li>URL de esta aplicación (se detecta automáticamente)</li>
+            </ol>
+        </div>
+
+        <div id="successAlert" class="alert success">
+            <strong>✅ ¡Éxito!</strong>
+            <p id="successMessage"></p>
+        </div>
+
+        <div id="errorAlert" class="alert error">
+            <strong>❌ Error</strong>
+            <p id="errorMessage"></p>
+        </div>
+
+        <form id="setupForm">
+            <div class="form-group">
+                <label for="authentik_url">URL de Authentik</label>
+                <input
+                    type="url"
+                    id="authentik_url"
+                    name="authentik_url"
+                    placeholder="https://auth.example.com"
+                    required
+                >
+                <small>URL de tu servidor Authentik (sin trailing slash)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="api_token">Token de API</label>
+                <input
+                    type="password"
+                    id="api_token"
+                    name="api_token"
+                    placeholder="••••••••••••••••••••"
+                    required
+                >
+                <small>Token con permisos de Provider y Application (Directory → Tokens)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="app_url">URL de esta aplicación</label>
+                <input
+                    type="url"
+                    id="app_url"
+                    name="app_url"
+                    required
+                >
+                <small>URL donde corre esta aplicación (se detecta automáticamente)</small>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">
+                Configurar Authentik
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Auto-detect application URL
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        document.getElementById('app_url').value = `${protocol}//${host}`;
+
+        // Form submission
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const successAlert = document.getElementById('successAlert');
+            const errorAlert = document.getElementById('errorAlert');
+
+            // Hide alerts
+            successAlert.classList.remove('show');
+            errorAlert.classList.remove('show');
+
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span> Configurando...';
+
+            try {
+                const formData = {
+                    authentik_url: document.getElementById('authentik_url').value.trim(),
+                    api_token: document.getElementById('api_token').value.trim(),
+                    app_url: document.getElementById('app_url').value.trim()
+                };
+
+                const response = await fetch('/api/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show success
+                    document.getElementById('successMessage').innerHTML = `
+                        ${result.message}<br><br>
+                        <strong>Client ID:</strong> ${result.client_id}<br>
+                        <strong>Redirect URI:</strong> ${result.redirect_uri}<br><br>
+                        <strong>Próximo paso:</strong> ${result.next_step}
+                    `;
+                    successAlert.classList.add('show');
+
+                    // Clear form
+                    document.getElementById('setupForm').reset();
+
+                    // Suggest restart
+                    setTimeout(() => {
+                        if (confirm('¿Reiniciar la aplicación ahora para aplicar los cambios?')) {
+                            // You can implement restart logic here or redirect
+                            window.location.href = '/';
+                        }
+                    }, 2000);
+                } else {
+                    // Show error
+                    document.getElementById('errorMessage').textContent =
+                        result.error || 'Ocurrió un error desconocido';
+                    errorAlert.classList.add('show');
+                }
+            } catch (error) {
+                document.getElementById('errorMessage').textContent =
+                    `Error de conexión: ${error.message}`;
+                errorAlert.classList.add('show');
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Configurar Authentik';
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+#### Flujo de uso del wizard
+
+1. **Usuario accede** a `https://tu-app.com/setup`
+2. **Completa el formulario**:
+   - URL de Authentik: `https://auth.example.com`
+   - Token de API: (creado previamente en Authentik)
+   - URL de la app: (auto-detectada)
+3. **Clic en "Configurar Authentik"**
+4. **El wizard**:
+   - Valida conexión con Authentik API
+   - Crea OAuth2 Provider
+   - Crea Application
+   - Guarda credenciales en `.env`
+5. **Mensaje de éxito** con client_id
+6. **Reiniciar aplicación** para aplicar cambios
+
+#### API de Authentik utilizada
+
+**Endpoints principales**:
+
+| Endpoint | Método | Propósito |
+|----------|--------|-----------|
+| `/api/v3/core/applications/` | GET | Listar aplicaciones existentes |
+| `/api/v3/core/applications/` | POST | Crear nueva aplicación |
+| `/api/v3/providers/oauth2/` | GET | Listar providers OAuth2 |
+| `/api/v3/providers/oauth2/` | POST | Crear provider OAuth2 |
+| `/api/v3/flows/instances/` | GET | Listar flows disponibles |
+
+**Estructura de datos del Provider**:
+
+```json
+{
+  "name": "MSG to EML Converter",
+  "authorization_flow": "uuid-del-flow-de-autenticacion",
+  "invalidation_flow": "uuid-del-flow-de-invalidacion",
+  "client_type": "confidential",
+  "redirect_uris": [
+    {
+      "matching_mode": "strict",
+      "url": "https://tu-app.com/callback"
+    }
+  ],
+  "sub_mode": "hashed_user_id",
+  "include_claims_in_id_token": true
+}
+```
+
+**Respuesta del Provider** (contiene las credenciales):
+
+```json
+{
+  "pk": "uuid-del-provider",
+  "name": "MSG to EML Converter",
+  "client_id": "0EQttwGxHfo2S0uSy7IhtV8qYPWKCkLIG56quYxp",
+  "client_secret": "secret-generado-automaticamente-por-authentik",
+  "redirect_uris": [...],
+  "include_claims_in_id_token": true,
+  ...
+}
+```
+
+#### Consideraciones de seguridad
+
+**🔐 Importante**:
+
+1. **Protege la ruta /setup**:
+   ```python
+   @app.route('/setup')
+   def setup_page():
+       # Solo permitir en desarrollo o primera configuración
+       if os.path.exists('.env') and os.getenv('ENABLE_AUTH') == 'true':
+           return "Setup already completed", 403
+       return render_template('setup.html')
+   ```
+
+2. **No expongas el token de API**:
+   - Nunca lo incluyas en código fuente
+   - No lo muestres en logs
+   - Guárdalo solo en `.env`
+
+3. **Valida inputs**:
+   - URL de Authentik debe ser HTTPS en producción
+   - Token debe tener formato válido
+   - App URL debe coincidir con el dominio real
+
+4. **Deshabilita /setup después de configurar**:
+   ```python
+   # En producción, elimina o protege /setup
+   if os.getenv('ENVIRONMENT') == 'production':
+       @app.route('/setup')
+       def setup_disabled():
+           return "Setup disabled in production", 404
+   ```
+
+#### Troubleshooting del wizard
+
+**Error: "Connection failed: 403 Forbidden"**
+- **Causa**: Token de API sin permisos
+- **Solución**: Verifica que el token tenga permisos de Provider y Application
+
+**Error: "Could not find authentication flow"**
+- **Causa**: No hay flows configurados en Authentik
+- **Solución**: Asegúrate que Authentik tiene flows por defecto (se crean en instalación)
+
+**Error: "redirect_uris: This field is required"**
+- **Causa**: Formato incorrecto de redirect_uris (versión antigua de Authentik)
+- **Solución**: Usa formato string en lugar de lista de objetos:
+  ```python
+  'redirect_uris': f"{self.app_url}/callback"  # Para Authentik < 2024.8
+  ```
+
+**Error: "Provider created but credentials not saved"**
+- **Causa**: Permisos de escritura en `.env`
+- **Solución**: Verifica permisos del archivo: `chmod 644 .env`
+
+#### Alternativa: Script CLI
+
+Si prefieres un script de línea de comandos en lugar de interfaz web, puedes usar:
+
+```bash
+python authentik_auto_setup.py
+```
+
+Este script hace lo mismo pero interactivo en la terminal.
 
 ---
 
