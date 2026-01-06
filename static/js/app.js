@@ -576,7 +576,17 @@ async function showPreview(file, index) {
         });
 
         if (!response.ok) {
-            throw new Error('Error al cargar vista previa');
+            // Try to get error message from response
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // If response is not JSON, use default message
+            }
+            throw new Error(errorMessage);
         }
 
         const result = await response.json();
@@ -593,7 +603,7 @@ async function showPreview(file, index) {
         contentDiv.style.display = 'block';
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error completo:', error);
         loadingDiv.style.display = 'none';
         errorDiv.style.display = 'block';
         document.getElementById('preview-error-message').textContent = error.message;

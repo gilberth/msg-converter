@@ -106,46 +106,66 @@ class MSGToEMLConverter:
         """Extract preview data from MSG object (without binary data)"""
         import base64
 
+        # Safely extract date
+        date_str = ''
+        try:
+            if msg.date:
+                if hasattr(msg.date, 'isoformat'):
+                    date_str = msg.date.isoformat()
+                else:
+                    date_str = str(msg.date)
+        except Exception:
+            date_str = ''
+
         preview = {
-            'subject': msg.subject or '',
-            'sender': msg.sender or '',
-            'to': msg.to or '',
-            'cc': msg.cc or '',
-            'bcc': msg.bcc or '',
-            'date': msg.date.isoformat() if msg.date else '',
-            'body': msg.body or '',
-            'htmlBody': msg.htmlBody or '',
+            'subject': str(msg.subject) if msg.subject else '',
+            'sender': str(msg.sender) if msg.sender else '',
+            'to': str(msg.to) if msg.to else '',
+            'cc': str(msg.cc) if msg.cc else '',
+            'bcc': str(msg.bcc) if msg.bcc else '',
+            'date': date_str,
+            'body': str(msg.body) if msg.body else '',
+            'htmlBody': str(msg.htmlBody) if msg.htmlBody else '',
             'attachments': [],
             'inline_attachments': []
         }
 
         # Extract attachment info (without binary data for regular attachments)
-        for i, attachment in enumerate(msg.attachments):
-            filename = attachment.longFilename or attachment.shortFilename or f'attachment_{i}'
+        try:
+            for i, attachment in enumerate(msg.attachments):
+                try:
+                    filename = attachment.longFilename or attachment.shortFilename or f'attachment_{i}'
 
-            if not attachment.data:
-                continue
+                    if not attachment.data:
+                        continue
 
-            content_id = getattr(attachment, 'cid', None) or getattr(attachment, 'contentId', None)
+                    content_id = getattr(attachment, 'cid', None) or getattr(attachment, 'contentId', None)
 
-            # Get MIME type
-            mime_type, _ = mimetypes.guess_type(filename)
-            if mime_type is None:
-                mime_type = 'application/octet-stream'
+                    # Get MIME type
+                    mime_type, _ = mimetypes.guess_type(filename)
+                    if mime_type is None:
+                        mime_type = 'application/octet-stream'
 
-            att_info = {
-                'filename': filename,
-                'size': len(attachment.data),
-                'type': mime_type
-            }
+                    att_info = {
+                        'filename': filename,
+                        'size': len(attachment.data),
+                        'type': mime_type
+                    }
 
-            # For inline attachments (images), include base64 data for preview
-            if content_id:
-                att_info['content_id'] = content_id
-                att_info['data'] = base64.b64encode(attachment.data).decode('utf-8')
-                preview['inline_attachments'].append(att_info)
-            else:
-                preview['attachments'].append(att_info)
+                    # For inline attachments (images), include base64 data for preview
+                    if content_id:
+                        att_info['content_id'] = content_id
+                        att_info['data'] = base64.b64encode(attachment.data).decode('utf-8')
+                        preview['inline_attachments'].append(att_info)
+                    else:
+                        preview['attachments'].append(att_info)
+                except Exception as e:
+                    # Skip problematic attachments
+                    print(f"Warning: Could not process attachment {i}: {e}")
+                    continue
+        except Exception as e:
+            # If we can't process attachments at all, continue without them
+            print(f"Warning: Could not process attachments: {e}")
 
         return preview
 
