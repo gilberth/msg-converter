@@ -164,6 +164,50 @@ def index():
                          version=__version__, version_name=__version_name__)
 
 
+@app.route('/preview', methods=['POST'])
+@auth.login_required
+def preview_file():
+    """Preview MSG file without converting"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No se seleccionó archivo'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No se seleccionó archivo'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Tipo de archivo no permitido. Solo se aceptan archivos .msg'}), 400
+
+    # Generate unique filename
+    original_filename = secure_filename(file.filename)
+    unique_id = str(uuid.uuid4())
+    msg_filename = f"{unique_id}_{original_filename}"
+    msg_path = os.path.join(app.config['UPLOAD_FOLDER'], msg_filename)
+
+    try:
+        # Save uploaded file temporarily
+        file.save(msg_path)
+
+        # Get preview data
+        preview_data = converter.preview_file(msg_path)
+
+        return jsonify({
+            'success': True,
+            'preview': preview_data
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        # Clean up uploaded MSG file
+        if os.path.exists(msg_path):
+            os.remove(msg_path)
+
+
 @app.route('/upload', methods=['POST'])
 @auth.login_required
 def upload_file():

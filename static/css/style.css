@@ -869,7 +869,159 @@ footer small {
 }
 
 /* ========================================
-   17. Print Styles
+   17. Preview Modal Styles
+   ======================================== */
+.preview-field {
+    padding: var(--spacing-sm);
+    background: var(--surface);
+    border-radius: var(--border-radius-sm);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.preview-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.preview-value {
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    word-wrap: break-word;
+}
+
+.preview-message-content {
+    background: var(--surface-elevated);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-md);
+    max-height: 500px;
+    overflow-y: auto;
+    font-size: var(--text-sm);
+    line-height: 1.8;
+}
+
+.preview-message-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius-sm);
+    margin: var(--spacing-sm) 0;
+}
+
+.preview-message-content pre {
+    background: var(--surface);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    overflow-x: auto;
+}
+
+.preview-attachment-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-sm);
+    background: var(--surface);
+    border-radius: var(--border-radius-sm);
+    transition: all var(--transition-base);
+}
+
+.preview-attachment-item:hover {
+    background: var(--primary-light);
+    color: white;
+    transform: translateX(4px);
+}
+
+.preview-attachment-icon {
+    font-size: 1.5rem;
+    margin-right: var(--spacing-sm);
+    color: var(--primary);
+}
+
+.preview-attachment-item:hover .preview-attachment-icon {
+    color: white;
+}
+
+.preview-attachment-info {
+    flex: 1;
+}
+
+.preview-attachment-name {
+    font-weight: 600;
+    font-size: var(--text-sm);
+}
+
+.preview-attachment-meta {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+.preview-attachment-item:hover .preview-attachment-meta {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Modal customization */
+#previewModal .modal-content {
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-xl);
+    border: none;
+}
+
+#previewModal .modal-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
+    border-bottom: none;
+}
+
+#previewModal .modal-title {
+    font-weight: 700;
+}
+
+#previewModal .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+#previewModal .modal-body {
+    padding: var(--spacing-lg);
+}
+
+/* Scrollbar styling for preview content */
+.preview-message-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.preview-message-content::-webkit-scrollbar-track {
+    background: var(--surface);
+    border-radius: var(--border-radius-sm);
+}
+
+.preview-message-content::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: var(--border-radius-sm);
+}
+
+.preview-message-content::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Preview button on file items */
+.btn-preview {
+    background: var(--primary);
+    color: white;
+    border: none;
+    transition: all var(--transition-base);
+}
+
+.btn-preview:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
+}
+
+/* ========================================
+   18. Print Styles
    ======================================== */
 @media print {
     body {

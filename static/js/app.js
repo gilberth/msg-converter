@@ -189,6 +189,17 @@ function displayFileList() {
             </div>
         `;
 
+        // Button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'd-flex gap-2';
+
+        // Preview button
+        const previewBtn = document.createElement('button');
+        previewBtn.className = 'btn btn-sm btn-preview';
+        previewBtn.innerHTML = '<i class="bi bi-eye-fill" aria-hidden="true"></i>';
+        previewBtn.setAttribute('aria-label', `Vista previa de ${file.name}`);
+        previewBtn.onclick = () => showPreview(file, index);
+
         // Remove button
         const removeBtn = document.createElement('button');
         removeBtn.className = 'btn btn-sm btn-outline-danger btn-remove';
@@ -196,8 +207,11 @@ function displayFileList() {
         removeBtn.setAttribute('aria-label', `Eliminar ${file.name}`);
         removeBtn.onclick = () => removeFile(index);
 
+        buttonContainer.appendChild(previewBtn);
+        buttonContainer.appendChild(removeBtn);
+
         fileItem.appendChild(fileInfo);
-        fileItem.appendChild(removeBtn);
+        fileItem.appendChild(buttonContainer);
         filesContainer.appendChild(fileItem);
     });
 
@@ -530,6 +544,195 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// ================================================
+// Preview Functionality
+// ================================================
+async function showPreview(file, index) {
+    // Get modal elements
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    const loadingDiv = document.getElementById('preview-loading');
+    const contentDiv = document.getElementById('preview-content');
+    const errorDiv = document.getElementById('preview-error');
+
+    // Reset modal state
+    loadingDiv.style.display = 'block';
+    contentDiv.style.display = 'none';
+    errorDiv.style.display = 'none';
+
+    // Show modal
+    modal.show();
+
+    try {
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Fetch preview data
+        const response = await fetch('/preview', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al cargar vista previa');
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Error desconocido');
+        }
+
+        // Populate preview data
+        populatePreview(result.preview);
+
+        // Show content
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+
+    } catch (error) {
+        console.error('Error:', error);
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+        document.getElementById('preview-error-message').textContent = error.message;
+    }
+}
+
+function populatePreview(data) {
+    // Set subject
+    document.getElementById('preview-subject').textContent = data.subject || '(Sin asunto)';
+
+    // Set sender
+    document.getElementById('preview-sender').textContent = data.sender || '(Desconocido)';
+
+    // Set date
+    if (data.date) {
+        const date = new Date(data.date);
+        document.getElementById('preview-date').textContent = date.toLocaleString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } else {
+        document.getElementById('preview-date').textContent = '(Desconocida)';
+    }
+
+    // Set recipients
+    document.getElementById('preview-to').textContent = data.to || '(Sin destinatarios)';
+
+    // Set CC if present
+    const ccContainer = document.getElementById('preview-cc-container');
+    if (data.cc && data.cc.trim()) {
+        document.getElementById('preview-cc').textContent = data.cc;
+        ccContainer.style.display = 'block';
+    } else {
+        ccContainer.style.display = 'none';
+    }
+
+    // Set attachments
+    const attachmentsContainer = document.getElementById('preview-attachments-container');
+    const attachmentsList = document.getElementById('preview-attachments-list');
+    const attachmentsCount = document.getElementById('preview-attachments-count');
+
+    if (data.attachments && data.attachments.length > 0) {
+        attachmentsCount.textContent = data.attachments.length;
+        attachmentsList.innerHTML = '';
+
+        data.attachments.forEach(att => {
+            const attItem = document.createElement('div');
+            attItem.className = 'preview-attachment-item mb-2';
+
+            // Get icon based on file type
+            const icon = getFileIcon(att.type);
+
+            attItem.innerHTML = `
+                <i class="bi ${icon} preview-attachment-icon" aria-hidden="true"></i>
+                <div class="preview-attachment-info">
+                    <div class="preview-attachment-name">${escapeHtml(att.filename)}</div>
+                    <div class="preview-attachment-meta">${att.type} • ${formatFileSize(att.size)}</div>
+                </div>
+            `;
+
+            attachmentsList.appendChild(attItem);
+        });
+
+        attachmentsContainer.style.display = 'block';
+    } else {
+        attachmentsContainer.style.display = 'none';
+    }
+
+    // Set message body
+    const bodyContent = document.getElementById('preview-body-content');
+
+    if (data.htmlBody && data.htmlBody.trim()) {
+        // Process HTML body with inline images
+        let htmlContent = data.htmlBody;
+
+        // Replace inline images with base64 data
+        if (data.inline_attachments && data.inline_attachments.length > 0) {
+            data.inline_attachments.forEach(inline => {
+                if (inline.content_id && inline.data) {
+                    // Remove < > from content_id if present
+                    const cid = inline.content_id.replace(/[<>]/g, '');
+
+                    // Create data URL
+                    const dataUrl = `data:${inline.type};base64,${inline.data}`;
+
+                    // Replace all occurrences of cid: references
+                    const cidPattern = new RegExp(`cid:${cid}`, 'gi');
+                    htmlContent = htmlContent.replace(cidPattern, dataUrl);
+                }
+            });
+        }
+
+        // Sanitize and display HTML
+        bodyContent.innerHTML = sanitizeHtml(htmlContent);
+    } else if (data.body && data.body.trim()) {
+        // Display plain text with line breaks preserved
+        bodyContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(data.body)}</pre>`;
+    } else {
+        bodyContent.innerHTML = '<p class="text-muted"><em>(Sin contenido)</em></p>';
+    }
+}
+
+function getFileIcon(mimeType) {
+    if (mimeType.startsWith('image/')) return 'bi-file-earmark-image';
+    if (mimeType.startsWith('video/')) return 'bi-file-earmark-play';
+    if (mimeType.startsWith('audio/')) return 'bi-file-earmark-music';
+    if (mimeType.includes('pdf')) return 'bi-file-earmark-pdf';
+    if (mimeType.includes('word') || mimeType.includes('document')) return 'bi-file-earmark-word';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'bi-file-earmark-excel';
+    if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return 'bi-file-earmark-ppt';
+    if (mimeType.includes('zip') || mimeType.includes('compressed')) return 'bi-file-earmark-zip';
+    if (mimeType.includes('text')) return 'bi-file-earmark-text';
+    return 'bi-file-earmark';
+}
+
+function sanitizeHtml(html) {
+    // Basic sanitization - remove script tags and dangerous attributes
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    // Remove script tags
+    const scripts = temp.querySelectorAll('script');
+    scripts.forEach(script => script.remove());
+
+    // Remove event handlers
+    const allElements = temp.querySelectorAll('*');
+    allElements.forEach(el => {
+        // Remove event handler attributes
+        Array.from(el.attributes).forEach(attr => {
+            if (attr.name.startsWith('on')) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+
+    return temp.innerHTML;
 }
 
 // ================================================
