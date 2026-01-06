@@ -703,7 +703,11 @@ function populatePreview(data) {
         bodyContent.innerHTML = sanitizeHtml(htmlContent);
     } else if (data.body && data.body.trim()) {
         // Display plain text with line breaks preserved
-        bodyContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(data.body)}</pre>`;
+        // Convert \n to <br> and escape HTML
+        const formattedBody = escapeHtml(data.body)
+            .replace(/\n/g, '<br>')
+            .replace(/  /g, '&nbsp;&nbsp;'); // Preserve double spaces
+        bodyContent.innerHTML = `<div style="line-height: 1.6; word-wrap: break-word;">${formattedBody}</div>`;
     } else {
         bodyContent.innerHTML = '<p class="text-muted"><em>(Sin contenido)</em></p>';
     }
