@@ -169,15 +169,15 @@ def index():
 def preview_file():
     """Preview MSG file without converting"""
     if 'file' not in request.files:
-        return jsonify({'error': 'No se seleccionó archivo'}), 400
+        return jsonify({'success': False, 'error': 'No se seleccionó archivo'}), 400
 
     file = request.files['file']
 
     if file.filename == '':
-        return jsonify({'error': 'No se seleccionó archivo'}), 400
+        return jsonify({'success': False, 'error': 'No se seleccionó archivo'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Tipo de archivo no permitido. Solo se aceptan archivos .msg'}), 400
+        return jsonify({'success': False, 'error': 'Tipo de archivo no permitido. Solo se aceptan archivos .msg'}), 400
 
     # Generate unique filename
     original_filename = secure_filename(file.filename)
@@ -197,15 +197,34 @@ def preview_file():
             'preview': preview_data
         })
 
-    except Exception as e:
+    except FileNotFoundError as e:
+        print(f"Preview error - File not found: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Archivo no encontrado'
+        }), 404
+    except ValueError as e:
+        print(f"Preview error - Invalid file: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Archivo MSG inválido'
+        }), 400
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        print(f"Preview error: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'Error al procesar archivo: {str(e)}'
         }), 500
     finally:
         # Clean up uploaded MSG file
         if os.path.exists(msg_path):
-            os.remove(msg_path)
+            try:
+                os.remove(msg_path)
+            except Exception as e:
+                print(f"Warning: Could not delete temp file {msg_path}: {e}")
 
 
 @app.route('/upload', methods=['POST'])
