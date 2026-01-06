@@ -76,6 +76,79 @@ class MSGToEMLConverter:
 
         return eml_path
 
+    def preview_file(self, msg_path):
+        """
+        Preview MSG file without converting to EML.
+        Returns message data as a dictionary suitable for JSON serialization.
+
+        Args:
+            msg_path (str): Path to the input MSG file
+
+        Returns:
+            dict: Message data including headers, body, and attachment info
+        """
+        if not os.path.exists(msg_path):
+            raise FileNotFoundError(f"MSG file not found: {msg_path}")
+
+        if not msg_path.lower().endswith('.msg'):
+            raise ValueError("Input file must have .msg extension")
+
+        # Open and parse MSG file
+        try:
+            msg = extract_msg.Message(msg_path)
+            preview_data = self._extract_preview_data(msg)
+            msg.close()
+            return preview_data
+        except Exception as e:
+            raise RuntimeError(f"Error reading MSG file: {e}")
+
+    def _extract_preview_data(self, msg):
+        """Extract preview data from MSG object (without binary data)"""
+        import base64
+
+        preview = {
+            'subject': msg.subject or '',
+            'sender': msg.sender or '',
+            'to': msg.to or '',
+            'cc': msg.cc or '',
+            'bcc': msg.bcc or '',
+            'date': msg.date.isoformat() if msg.date else '',
+            'body': msg.body or '',
+            'htmlBody': msg.htmlBody or '',
+            'attachments': [],
+            'inline_attachments': []
+        }
+
+        # Extract attachment info (without binary data for regular attachments)
+        for i, attachment in enumerate(msg.attachments):
+            filename = attachment.longFilename or attachment.shortFilename or f'attachment_{i}'
+
+            if not attachment.data:
+                continue
+
+            content_id = getattr(attachment, 'cid', None) or getattr(attachment, 'contentId', None)
+
+            # Get MIME type
+            mime_type, _ = mimetypes.guess_type(filename)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
+
+            att_info = {
+                'filename': filename,
+                'size': len(attachment.data),
+                'type': mime_type
+            }
+
+            # For inline attachments (images), include base64 data for preview
+            if content_id:
+                att_info['content_id'] = content_id
+                att_info['data'] = base64.b64encode(attachment.data).decode('utf-8')
+                preview['inline_attachments'].append(att_info)
+            else:
+                preview['attachments'].append(att_info)
+
+        return preview
+
     def _extract_msg_data(self, msg):
         """Extract data from MSG object"""
         data = {
