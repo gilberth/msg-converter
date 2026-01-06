@@ -117,15 +117,26 @@ class MSGToEMLConverter:
         except Exception:
             date_str = ''
 
+        # Helper function to safely convert to string
+        def safe_str(value):
+            if value is None:
+                return ''
+            if isinstance(value, bytes):
+                try:
+                    return value.decode('utf-8', errors='ignore')
+                except:
+                    return value.decode('latin-1', errors='ignore')
+            return str(value)
+
         preview = {
-            'subject': str(msg.subject) if msg.subject else '',
-            'sender': str(msg.sender) if msg.sender else '',
-            'to': str(msg.to) if msg.to else '',
-            'cc': str(msg.cc) if msg.cc else '',
-            'bcc': str(msg.bcc) if msg.bcc else '',
+            'subject': safe_str(msg.subject),
+            'sender': safe_str(msg.sender),
+            'to': safe_str(msg.to),
+            'cc': safe_str(msg.cc),
+            'bcc': safe_str(msg.bcc),
             'date': date_str,
-            'body': str(msg.body) if msg.body else '',
-            'htmlBody': str(msg.htmlBody) if msg.htmlBody else '',
+            'body': safe_str(msg.body),
+            'htmlBody': safe_str(msg.htmlBody),
             'attachments': [],
             'inline_attachments': []
         }
