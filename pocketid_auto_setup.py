@@ -107,8 +107,9 @@ class PocketIDAutoSetup:
     def api_request(self, method, endpoint, data=None):
         """Realizar petición a la API de Pocket ID"""
         url = f"{self.base_url}/api/{endpoint}"
+        # Pocket ID uses X-API-KEY header, not Authorization Bearer
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
+            'X-API-KEY': self.api_key,
             'Content-Type': 'application/json'
         }
 
@@ -281,8 +282,9 @@ class WebPocketIDSetup:
     def api_request(self, method, endpoint, data=None):
         """Realizar petición a la API de Pocket ID"""
         url = f"{self.base_url}/api/{endpoint}"
+        # Pocket ID uses X-API-KEY header, not Authorization Bearer
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
+            'X-API-KEY': self.api_key,
             'Content-Type': 'application/json'
         }
 
