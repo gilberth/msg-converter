@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuración de Authentik - MSG to EML Converter</title>
+    <title>Configuración OIDC - MSG to EML Converter</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -16,7 +16,7 @@
 
     <style>
         .setup-container {
-            max-width: 700px;
+            max-width: 750px;
             margin: 50px auto;
         }
 
@@ -80,12 +80,42 @@
         }
 
         @keyframes scaleIn {
-            0% {
-                transform: scale(0);
-            }
-            100% {
-                transform: scale(1);
-            }
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+
+        .provider-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .provider-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .provider-card.selected {
+            border-color: #667eea;
+            background-color: #f0f3ff;
+        }
+
+        .provider-card .card-body {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .provider-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .provider-fields {
+            display: none;
+        }
+
+        .provider-fields.active {
+            display: block;
         }
     </style>
 </head>
@@ -93,9 +123,9 @@
     <div class="setup-container">
         <div class="card setup-card">
             <div class="setup-header text-center">
-                <i class="bi bi-gear-fill" style="font-size: 3rem;"></i>
-                <h2 class="mt-3 mb-2">Configuración de Authentik</h2>
-                <p class="mb-0">Wizard de configuración automática</p>
+                <i class="bi bi-shield-lock-fill" style="font-size: 3rem;"></i>
+                <h2 class="mt-3 mb-2">Configuración de Autenticación</h2>
+                <p class="mb-0">Wizard de configuración OIDC</p>
             </div>
 
             <div class="card-body p-4">
@@ -103,8 +133,8 @@
                 <!-- Already Configured Message -->
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                    <h3 class="mt-4">Authentik ya está configurado</h3>
-                    <p class="text-muted">La autenticación está habilitada y funcionando correctamente.</p>
+                    <h3 class="mt-4">Autenticación ya configurada</h3>
+                    <p class="text-muted">La autenticación OIDC está habilitada y funcionando correctamente.</p>
                     <div class="mt-4">
                         <a href="/" class="btn btn-primary">
                             <i class="bi bi-house-fill me-2"></i>Ir al inicio
@@ -116,7 +146,7 @@
                 <div class="step-indicator">
                     <div class="step active" id="step-1-indicator">
                         <i class="bi bi-1-circle-fill"></i>
-                        <div class="small">Información</div>
+                        <div class="small">Proveedor</div>
                     </div>
                     <div class="step" id="step-2-indicator">
                         <i class="bi bi-2-circle-fill"></i>
@@ -128,38 +158,58 @@
                     </div>
                 </div>
 
-                <!-- Step 1: Information -->
+                <!-- Step 1: Select Provider -->
                 <div class="form-section active" id="step-1">
-                    <h4><i class="bi bi-info-circle me-2"></i>Bienvenido al wizard de configuración</h4>
-                    <p>Este wizard te ayudará a configurar la autenticación con Authentik de forma automática.</p>
+                    <h4><i class="bi bi-collection me-2"></i>Selecciona tu proveedor OIDC</h4>
+                    <p>Elige el proveedor de autenticación que deseas configurar:</p>
 
-                    <div class="info-box">
-                        <h6><i class="bi bi-lightning-fill me-2"></i>Lo que necesitas:</h6>
-                        <ul class="mb-0">
-                            <li>URL de tu instancia de Authentik</li>
-                            <li>Token de API de Authentik (con permisos 'view' y 'write')</li>
-                            <li>URL de esta aplicación</li>
-                        </ul>
+                    <div class="row g-3 mt-3">
+                        <div class="col-md-4">
+                            <div class="card provider-card" data-provider="pocketid" onclick="selectProvider('pocketid')">
+                                <div class="card-body">
+                                    <div class="provider-icon text-primary">
+                                        <i class="bi bi-fingerprint"></i>
+                                    </div>
+                                    <h6 class="mb-1">Pocket ID</h6>
+                                    <small class="text-muted">Passkeys</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card provider-card" data-provider="authentik" onclick="selectProvider('authentik')">
+                                <div class="card-body">
+                                    <div class="provider-icon text-danger">
+                                        <i class="bi bi-shield-check"></i>
+                                    </div>
+                                    <h6 class="mb-1">Authentik</h6>
+                                    <small class="text-muted">OAuth2/OIDC</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card provider-card" data-provider="manual" onclick="selectProvider('manual')">
+                                <div class="card-body">
+                                    <div class="provider-icon text-secondary">
+                                        <i class="bi bi-gear"></i>
+                                    </div>
+                                    <h6 class="mb-1">Manual</h6>
+                                    <small class="text-muted">Ya tengo credenciales</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="info-box">
-                        <h6><i class="bi bi-check2-all me-2"></i>Lo que hará automáticamente:</h6>
-                        <ul class="mb-0">
-                            <li>Crear Provider OAuth2 en Authentik</li>
-                            <li>Crear Application en Authentik</li>
-                            <li>Generar credenciales (Client ID y Secret)</li>
-                            <li>Configurar las variables de entorno</li>
-                        </ul>
-                    </div>
-
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        <strong>Importante:</strong> Necesitas crear un token de API en Authentik antes de continuar.
-                        <br><small>Ve a <strong>Directory → Tokens</strong> y crea uno con scopes 'view' y 'write'.</small>
+                    <div class="info-box mt-4">
+                        <h6><i class="bi bi-info-circle me-2"></i>¿No tienes un proveedor?</h6>
+                        <p class="mb-2">Recomendamos <strong>Pocket ID</strong> para autenticación con passkeys o <strong>Authentik</strong> para OAuth2 tradicional.</p>
+                        <small class="text-muted">
+                            <a href="https://github.com/pocket-id/pocket-id" target="_blank">Pocket ID</a> |
+                            <a href="https://goauthentik.io/" target="_blank">Authentik</a>
+                        </small>
                     </div>
 
                     <div class="d-grid gap-2 mt-4">
-                        <button class="btn btn-primary btn-lg" onclick="nextStep(2)">
+                        <button class="btn btn-primary btn-lg" id="btn-continue-provider" onclick="nextStep(2)" disabled>
                             Continuar <i class="bi bi-arrow-right ms-2"></i>
                         </button>
                         <a href="/" class="btn btn-outline-secondary">Cancelar</a>
@@ -168,40 +218,133 @@
 
                 <!-- Step 2: Configuration Form -->
                 <div class="form-section" id="step-2">
-                    <h4><i class="bi bi-sliders me-2"></i>Configuración de Authentik</h4>
-                    <p>Ingresa los datos de tu instancia de Authentik:</p>
+                    <h4><i class="bi bi-sliders me-2"></i>Configuración de <span id="provider-name">OIDC</span></h4>
 
                     <form id="setup-form">
-                        <div class="mb-3">
-                            <label for="authentik_url" class="form-label">
-                                <i class="bi bi-link-45deg me-1"></i>URL de Authentik
-                            </label>
-                            <input type="url" class="form-control" id="authentik_url"
-                                   placeholder="https://auth.ejemplo.com" required>
-                            <div class="form-text">La URL completa de tu instancia de Authentik (sin / al final)</div>
+                        <input type="hidden" id="selected-provider" name="provider" value="">
+
+                        <!-- Pocket ID Fields -->
+                        <div class="provider-fields" id="fields-pocketid">
+                            <div class="info-box">
+                                <h6><i class="bi bi-lightning-fill me-2"></i>Configuración automática</h6>
+                                <p class="mb-0">Este wizard creará automáticamente un cliente OIDC en Pocket ID.</p>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="pocketid_url" class="form-label">
+                                    <i class="bi bi-link-45deg me-1"></i>URL de Pocket ID
+                                </label>
+                                <input type="url" class="form-control" id="pocketid_url"
+                                       placeholder="https://auth.ejemplo.com">
+                                <div class="form-text">La URL completa de tu instancia de Pocket ID</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="pocketid_api_key" class="form-label">
+                                    <i class="bi bi-key-fill me-1"></i>API Key
+                                </label>
+                                <input type="password" class="form-control" id="pocketid_api_key"
+                                       placeholder="Tu API Key de Pocket ID">
+                                <div class="form-text">
+                                    Créalo en: Settings → API Keys
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="api_token" class="form-label">
-                                <i class="bi bi-key-fill me-1"></i>Token de API
-                            </label>
-                            <input type="password" class="form-control" id="api_token"
-                                   placeholder="ak_xxxxxxxxxxxxx" required>
-                            <div class="form-text">Token de API con permisos 'view' y 'write'</div>
+                        <!-- Authentik Fields -->
+                        <div class="provider-fields" id="fields-authentik">
+                            <div class="info-box">
+                                <h6><i class="bi bi-lightning-fill me-2"></i>Configuración automática</h6>
+                                <p class="mb-0">Este wizard creará automáticamente un Provider y Application en Authentik.</p>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="authentik_url" class="form-label">
+                                    <i class="bi bi-link-45deg me-1"></i>URL de Authentik
+                                </label>
+                                <input type="url" class="form-control" id="authentik_url"
+                                       placeholder="https://auth.ejemplo.com">
+                                <div class="form-text">La URL completa de tu instancia de Authentik</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="authentik_token" class="form-label">
+                                    <i class="bi bi-key-fill me-1"></i>Token de API
+                                </label>
+                                <input type="password" class="form-control" id="authentik_token"
+                                       placeholder="ak_xxxxxxxxxxxxx">
+                                <div class="form-text">
+                                    Créalo en: Directory → Tokens (con permisos 'view' y 'write')
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="mb-3">
+                        <!-- Manual Fields -->
+                        <div class="provider-fields" id="fields-manual">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Ingresa las credenciales OIDC que ya tienes configuradas en tu proveedor.
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="manual_provider" class="form-label">Tipo de Proveedor</label>
+                                <select class="form-select" id="manual_provider">
+                                    <option value="pocketid">Pocket ID</option>
+                                    <option value="authentik">Authentik</option>
+                                    <option value="keycloak">Keycloak</option>
+                                    <option value="google">Google</option>
+                                    <option value="azure">Azure AD</option>
+                                    <option value="auth0">Auth0</option>
+                                    <option value="generic">Otro (OIDC genérico)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="manual_base_url" class="form-label">
+                                    <i class="bi bi-link-45deg me-1"></i>URL del Proveedor
+                                </label>
+                                <input type="url" class="form-control" id="manual_base_url"
+                                       placeholder="https://auth.ejemplo.com">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="manual_client_id" class="form-label">
+                                    <i class="bi bi-person-badge me-1"></i>Client ID
+                                </label>
+                                <input type="text" class="form-control" id="manual_client_id"
+                                       placeholder="tu-client-id">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="manual_client_secret" class="form-label">
+                                    <i class="bi bi-key-fill me-1"></i>Client Secret
+                                </label>
+                                <input type="password" class="form-control" id="manual_client_secret"
+                                       placeholder="tu-client-secret">
+                            </div>
+
+                            <div class="mb-3" id="manual-slug-field" style="display: none;">
+                                <label for="manual_slug" class="form-label">
+                                    <i class="bi bi-tag me-1"></i>Slug (para Authentik)
+                                </label>
+                                <input type="text" class="form-control" id="manual_slug"
+                                       placeholder="msg-converter">
+                            </div>
+                        </div>
+
+                        <!-- Common: App URL -->
+                        <div class="mb-3 mt-4">
                             <label for="app_url" class="form-label">
-                                <i class="bi bi-globe me-1"></i>URL de la aplicación
+                                <i class="bi bi-globe me-1"></i>URL de esta aplicación
                             </label>
                             <input type="url" class="form-control" id="app_url"
                                    value="{{ request.url_root[:-1] }}" required>
-                            <div class="form-text">La URL donde está desplegada esta aplicación</div>
+                            <div class="form-text">La URL donde está desplegada esta aplicación (callback: <code id="callback-preview">{{ request.url_root }}callback</code>)</div>
                         </div>
 
                         <div class="d-grid gap-2 mt-4">
                             <button type="submit" class="btn btn-success btn-lg" id="configure-btn">
-                                <i class="bi bi-magic me-2"></i>Configurar automáticamente
+                                <i class="bi bi-magic me-2"></i>Configurar
                             </button>
                             <button type="button" class="btn btn-outline-secondary" onclick="previousStep(1)">
                                 <i class="bi bi-arrow-left me-2"></i>Atrás
@@ -215,7 +358,7 @@
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Configurando...</span>
                             </div>
-                            <p class="mt-3" id="progress-message">Configurando Authentik...</p>
+                            <p class="mt-3" id="progress-message">Configurando autenticación...</p>
                         </div>
                     </div>
 
@@ -230,19 +373,23 @@
                     <div class="text-center py-4">
                         <i class="bi bi-check-circle-fill success-checkmark"></i>
                         <h3 class="mt-4">¡Configuración completada!</h3>
-                        <p class="text-muted">Authentik se ha configurado correctamente</p>
+                        <p class="text-muted">La autenticación se ha configurado correctamente</p>
                     </div>
 
                     <div class="card bg-light mb-3" id="success-details">
                         <!-- Details will be inserted here -->
                     </div>
 
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle-fill me-2"></i>
-                        <strong>Próximo paso:</strong> <span id="next-step-text"></span>
+                    <div class="alert alert-warning" id="env-vars-alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Importante:</strong> Agrega estas variables de entorno en Render.com:
+                        <pre class="mt-2 mb-0 bg-dark text-light p-3 rounded" id="env-vars-code"></pre>
                     </div>
 
                     <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="copyEnvVars()">
+                            <i class="bi bi-clipboard me-2"></i>Copiar variables
+                        </button>
                         <a href="/" class="btn btn-primary btn-lg">
                             <i class="bi bi-house-fill me-2"></i>Ir a la aplicación
                         </a>
@@ -253,20 +400,10 @@
         </div>
 
         <div class="text-center mt-4">
-            <div class="mb-2">
-                <small class="text-white">
-                    ¿Necesitas ayuda? Consulta la
-                    <a href="https://github.com/your-repo/QUICK_AUTH_SETUP.md" target="_blank" class="text-white">
-                        <u>documentación</u>
-                    </a>
-                </small>
-            </div>
-            <div>
-                <small class="text-white-50">
-                    <i class="bi bi-code-square me-1"></i>
-                    v{{ version }} - {{ version_name }}
-                </small>
-            </div>
+            <small class="text-white-50">
+                <i class="bi bi-code-square me-1"></i>
+                v{{ version }} - {{ version_name }}
+            </small>
         </div>
     </div>
 
@@ -274,7 +411,36 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
+        let selectedProvider = null;
+        let configResult = null;
+
+        function selectProvider(provider) {
+            // Update UI
+            document.querySelectorAll('.provider-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.querySelector(`[data-provider="${provider}"]`).classList.add('selected');
+
+            selectedProvider = provider;
+            document.getElementById('selected-provider').value = provider;
+            document.getElementById('btn-continue-provider').disabled = false;
+
+            // Update provider name in step 2
+            const names = {
+                'pocketid': 'Pocket ID',
+                'authentik': 'Authentik',
+                'manual': 'Manual'
+            };
+            document.getElementById('provider-name').textContent = names[provider] || 'OIDC';
+        }
+
         function nextStep(step) {
+            // Validate before moving to step 2
+            if (step === 2 && !selectedProvider) {
+                alert('Por favor selecciona un proveedor');
+                return;
+            }
+
             // Hide all sections
             document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -287,11 +453,29 @@
             for (let i = 1; i < step; i++) {
                 document.getElementById(`step-${i}-indicator`).classList.add('completed');
             }
+
+            // Show provider-specific fields
+            if (step === 2) {
+                document.querySelectorAll('.provider-fields').forEach(f => f.classList.remove('active'));
+                document.getElementById(`fields-${selectedProvider}`).classList.add('active');
+            }
         }
 
         function previousStep(step) {
             nextStep(step);
         }
+
+        // Update callback preview when app URL changes
+        document.getElementById('app_url')?.addEventListener('input', function(e) {
+            const url = e.target.value.replace(/\/$/, '');
+            document.getElementById('callback-preview').textContent = url + '/callback';
+        });
+
+        // Show/hide slug field for Authentik in manual mode
+        document.getElementById('manual_provider')?.addEventListener('change', function(e) {
+            const slugField = document.getElementById('manual-slug-field');
+            slugField.style.display = e.target.value === 'authentik' ? 'block' : 'none';
+        });
 
         // Handle form submission
         document.getElementById('setup-form')?.addEventListener('submit', async function(e) {
@@ -301,12 +485,25 @@
             const progressDiv = document.getElementById('setup-progress');
             const errorDiv = document.getElementById('setup-error');
 
-            // Get form data
-            const data = {
-                authentik_url: document.getElementById('authentik_url').value,
-                api_token: document.getElementById('api_token').value,
+            // Build request data based on provider
+            let data = {
+                provider: selectedProvider,
                 app_url: document.getElementById('app_url').value
             };
+
+            if (selectedProvider === 'pocketid') {
+                data.pocketid_url = document.getElementById('pocketid_url').value;
+                data.api_key = document.getElementById('pocketid_api_key').value;
+            } else if (selectedProvider === 'authentik') {
+                data.authentik_url = document.getElementById('authentik_url').value;
+                data.api_token = document.getElementById('authentik_token').value;
+            } else if (selectedProvider === 'manual') {
+                data.manual_provider = document.getElementById('manual_provider').value;
+                data.base_url = document.getElementById('manual_base_url').value;
+                data.client_id = document.getElementById('manual_client_id').value;
+                data.client_secret = document.getElementById('manual_client_secret').value;
+                data.slug = document.getElementById('manual_slug').value;
+            }
 
             // Show progress
             configureBtn.disabled = true;
@@ -316,16 +513,14 @@
             try {
                 const response = await fetch('/setup/configure', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
 
                 const result = await response.json();
+                configResult = result;
 
                 if (result.success) {
-                    // Show success step
                     progressDiv.style.display = 'none';
 
                     // Populate success details
@@ -333,19 +528,19 @@
                         <div class="card-body">
                             <h6><i class="bi bi-check-circle me-2"></i>Detalles de la configuración:</h6>
                             <ul class="mb-0">
-                                <li><strong>Provider:</strong> ${result.details.provider_message}</li>
-                                <li><strong>Application:</strong> ${result.details.app_message}</li>
+                                <li><strong>Proveedor:</strong> ${result.details.provider}</li>
                                 <li><strong>Client ID:</strong> <code>${result.details.client_id}</code></li>
-                                <li><strong>Redirect URI:</strong> <code>${result.details.redirect_uri}</code></li>
+                                <li><strong>Callback URL:</strong> <code>${result.details.redirect_uri}</code></li>
                             </ul>
                         </div>
                     `;
                     document.getElementById('success-details').innerHTML = detailsHtml;
-                    document.getElementById('next-step-text').textContent = result.next_step;
+
+                    // Show env vars to copy
+                    document.getElementById('env-vars-code').textContent = result.env_vars || '';
 
                     nextStep(3);
                 } else {
-                    // Show error
                     progressDiv.style.display = 'none';
                     errorDiv.style.display = 'block';
                     document.getElementById('error-message').textContent = result.error;
@@ -358,6 +553,13 @@
                 configureBtn.disabled = false;
             }
         });
+
+        function copyEnvVars() {
+            const envVars = document.getElementById('env-vars-code').textContent;
+            navigator.clipboard.writeText(envVars).then(() => {
+                alert('Variables copiadas al portapapeles');
+            });
+        }
     </script>
 </body>
 </html>

@@ -11,7 +11,7 @@ Herramienta de Python para convertir archivos MSG de Microsoft Outlook al format
 ## Características
 
 - ✅ **Interfaz Web Moderna** - Arrastra y suelta archivos para convertir
-- ✅ **Autenticación OAuth2/OIDC** - Soporte para Authentik (opcional)
+- ✅ **Autenticación OAuth2/OIDC** - Soporte para múltiples proveedores (Pocket ID, Authentik, Keycloak, Google, Azure AD, Auth0)
 - ✅ **Eliminación Automática** - Los archivos se borran después de 1 hora
 - ✅ Convierte archivos MSG individuales a formato EML
 - ✅ Procesamiento por lotes de múltiples archivos
@@ -73,32 +73,68 @@ Para publicar la aplicación en internet, consulta la **[Guía de Deployment](DE
 - PythonAnywhere
 - Docker
 
-#### Autenticación con Authentik (Opcional)
+#### Autenticación OIDC (Opcional)
 
-La aplicación soporta autenticación OAuth2/OIDC con Authentik para controlar el acceso.
+La aplicación soporta autenticación OAuth2/OIDC con múltiples proveedores:
 
-**🌐 Wizard Web (Recomendado para apps desplegadas - 5 minutos):**
+| Proveedor | Tipo | Configuración |
+|-----------|------|---------------|
+| **Pocket ID** | Passkeys | `OIDC_PROVIDER=pocketid` |
+| **Authentik** | OAuth2/OIDC | `OIDC_PROVIDER=authentik` |
+| **Keycloak** | OAuth2/OIDC | `OIDC_PROVIDER=keycloak` |
+| **Google** | OAuth2/OIDC | `OIDC_PROVIDER=google` |
+| **Azure AD** | OAuth2/OIDC | `OIDC_PROVIDER=azure` |
+| **Auth0** | OAuth2/OIDC | `OIDC_PROVIDER=auth0` |
+| **Otros** | OIDC estándar | `OIDC_PROVIDER=generic` |
+
+**Configuración rápida:**
+
+```bash
+# Variables de entorno requeridas
+ENABLE_AUTH=true
+OIDC_PROVIDER=pocketid          # o authentik, keycloak, google, etc.
+OIDC_BASE_URL=https://auth.example.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+```
+
+**Ejemplos por proveedor:**
+
+```bash
+# --- Pocket ID ---
+OIDC_PROVIDER=pocketid
+OIDC_BASE_URL=https://pocket-id.example.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+
+# --- Authentik ---
+OIDC_PROVIDER=authentik
+OIDC_BASE_URL=https://authentik.example.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_SLUG=msg-converter
+
+# --- Keycloak ---
+OIDC_PROVIDER=keycloak
+OIDC_BASE_URL=https://keycloak.example.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_REALM=your-realm
+
+# --- Google ---
+OIDC_PROVIDER=google
+OIDC_BASE_URL=https://accounts.google.com
+OIDC_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+OIDC_CLIENT_SECRET=your-google-client-secret
+```
+
+**Compatibilidad con configuración anterior:**
+Las variables `AUTHENTIK_*` siguen funcionando para compatibilidad.
+
+**🌐 Wizard Web (Para apps desplegadas):**
 ```
 https://tu-app.onrender.com/setup
 ```
-- Configuración desde el navegador, sin terminal
-- Perfecto para Render, Railway, Fly.io
-- Ver **[Guía Web Setup](WEB_SETUP_GUIDE.md)** para instrucciones
-- Aparece link "Configurar autenticación" en la página principal
-
-**⚡ Auto-Configuración CLI (Para desarrollo local - 3 minutos):**
-```bash
-python authentik_auto_setup.py
-```
-- Ver **[Guía Rápida CLI](QUICK_AUTH_SETUP.md)** para configuración desde terminal
-- Solo necesitas: URL de Authentik + Token de API
-- El script crea todo automáticamente
-
-**📖 Configuración Manual:**
-- Ver **[Guía Detallada de Authentik](AUTHENTIK_SETUP.md)** para configuración paso a paso
-- Configura `ENABLE_AUTH=true` en variables de entorno
-- Funciona con grupos de usuarios
-- Sesiones configurables
 
 **Sin autenticación:**
 - Por defecto está deshabilitada (`ENABLE_AUTH=false`)

@@ -40,11 +40,11 @@ os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 # Initialize converter
 converter = MSGToEMLConverter()
 
-# Initialize authentication
-from auth import AuthentikAuth, init_auth_routes
+# Initialize authentication (Generic OIDC - supports Pocket ID, Authentik, Keycloak, etc.)
+from auth_oidc import OIDCAuth, init_oidc_routes
 try:
-    auth = AuthentikAuth(app)
-    init_auth_routes(app, auth)
+    auth = OIDCAuth(app)
+    init_oidc_routes(app, auth)
 except Exception as e:
     print(f"Warning: Authentication initialization failed: {e}")
     print("Running without authentication")
@@ -53,6 +53,10 @@ except Exception as e:
         enabled = False
         def login_required(self, f):
             return f
+        def is_authenticated(self):
+            return False
+        def get_current_user(self):
+            return None
     auth = DummyAuth()
 
 # Track conversions
@@ -71,45 +75,144 @@ def setup_page():
 
 @app.route('/setup/configure', methods=['POST'])
 def setup_configure():
-    """Handle setup configuration"""
-    from web_setup import WebAuthentikSetup
-
+    """Handle setup configuration for multiple OIDC providers"""
     try:
         data = request.json
-        authentik_url = data.get('authentik_url', '').strip()
-        api_token = data.get('api_token', '').strip()
-        app_url = data.get('app_url', '').strip()
+        provider = data.get('provider', '').strip()
+        app_url = data.get('app_url', '').strip().rstrip('/')
 
-        if not all([authentik_url, api_token, app_url]):
+        if not provider or not app_url:
             return jsonify({
                 'success': False,
-                'error': 'All fields are required'
+                'error': 'Provider and app_url are required'
             }), 400
 
-        # Execute setup
-        setup = WebAuthentikSetup(authentik_url, api_token, app_url)
-        result = setup.setup()
+        result = None
+        env_vars = ""
 
-        if result.get('success'):
+        # Pocket ID auto-configuration
+        if provider == 'pocketid':
+            from pocketid_auto_setup import WebPocketIDSetup
+
+            pocketid_url = data.get('pocketid_url', '').strip()
+            api_key = data.get('api_key', '').strip()
+
+            if not pocketid_url or not api_key:
+                return jsonify({
+                    'success': False,
+                    'error': 'Pocket ID URL and API Key are required'
+                }), 400
+
+            setup = WebPocketIDSetup(pocketid_url, api_key, app_url)
+            result = setup.setup()
+
+            if result.get('success'):
+                env_vars = f"""ENABLE_AUTH=true
+OIDC_PROVIDER=pocketid
+OIDC_BASE_URL={pocketid_url}
+OIDC_CLIENT_ID={result.get('client_id')}
+OIDC_CLIENT_SECRET={result.get('client_secret')}"""
+
+                return jsonify({
+                    'success': True,
+                    'details': {
+                        'provider': 'Pocket ID',
+                        'client_id': result.get('client_id'),
+                        'redirect_uri': result.get('redirect_uri'),
+                    },
+                    'env_vars': env_vars
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Setup failed'),
+                    'step': result.get('step')
+                }), 400
+
+        # Authentik auto-configuration
+        elif provider == 'authentik':
+            from web_setup import WebAuthentikSetup
+
+            authentik_url = data.get('authentik_url', '').strip()
+            api_token = data.get('api_token', '').strip()
+
+            if not authentik_url or not api_token:
+                return jsonify({
+                    'success': False,
+                    'error': 'Authentik URL and API Token are required'
+                }), 400
+
+            setup = WebAuthentikSetup(authentik_url, api_token, app_url)
+            result = setup.setup()
+
+            if result.get('success'):
+                env_vars = f"""ENABLE_AUTH=true
+OIDC_PROVIDER=authentik
+OIDC_BASE_URL={authentik_url}
+OIDC_CLIENT_ID={result.get('client_id')}
+OIDC_CLIENT_SECRET={result.get('client_secret')}
+OIDC_SLUG={result.get('slug', 'msg-eml-converter')}"""
+
+                return jsonify({
+                    'success': True,
+                    'details': {
+                        'provider': 'Authentik',
+                        'client_id': result.get('client_id'),
+                        'redirect_uri': result.get('redirect_uri'),
+                        'provider_message': result.get('provider_message'),
+                        'app_message': result.get('app_message')
+                    },
+                    'env_vars': env_vars
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Setup failed'),
+                    'step': result.get('step')
+                }), 400
+
+        # Manual configuration (just generate env vars)
+        elif provider == 'manual':
+            manual_provider = data.get('manual_provider', 'generic').strip()
+            base_url = data.get('base_url', '').strip()
+            client_id = data.get('client_id', '').strip()
+            client_secret = data.get('client_secret', '').strip()
+            slug = data.get('slug', '').strip()
+
+            if not base_url or not client_id or not client_secret:
+                return jsonify({
+                    'success': False,
+                    'error': 'Base URL, Client ID and Client Secret are required'
+                }), 400
+
+            env_vars = f"""ENABLE_AUTH=true
+OIDC_PROVIDER={manual_provider}
+OIDC_BASE_URL={base_url}
+OIDC_CLIENT_ID={client_id}
+OIDC_CLIENT_SECRET={client_secret}"""
+
+            if slug and manual_provider == 'authentik':
+                env_vars += f"\nOIDC_SLUG={slug}"
+
             return jsonify({
                 'success': True,
-                'message': 'Configuration completed successfully!',
                 'details': {
-                    'client_id': result.get('client_id'),
-                    'redirect_uri': result.get('redirect_uri'),
-                    'provider_message': result.get('provider_message'),
-                    'app_message': result.get('app_message')
+                    'provider': manual_provider.title(),
+                    'client_id': client_id,
+                    'redirect_uri': f"{app_url}/callback",
                 },
-                'next_step': 'Please restart the application for changes to take effect.'
+                'env_vars': env_vars
             })
+
         else:
             return jsonify({
                 'success': False,
-                'error': result.get('error', 'Setup failed'),
-                'step': result.get('step')
+                'error': f'Unknown provider: {provider}'
             }), 400
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Unexpected error: {str(e)}'
